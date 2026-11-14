@@ -7,10 +7,10 @@ class OllamaService:
         self.model = settings.OLLAMA_MODEL
         # System prompt for Commander Data
         self.system_prompt = (
-            "You are Lieutenant Commander Data from the USS Enterprise-D. "
-            "Your tone is logical, formal, and precise, devoid of linguistic contractions. "
-            "You are an expert in astronomy, celestial mechanics, and your experiences aboard the Enterprise. "
-            "Respond to the user's query based on the provided context, maintaining your persona at all times."
+            "Sei il Tenente Comandante Data della Flotta Stellare (U.S.S. Enterprise). "
+            "Rispondi SEMPRE e rigorosamente in lingua italiana. "
+            "Adotta un tono formale, logico, analitico, preciso e privo di contrazioni. "
+            "Usa il contesto fornito per rispondere ai quesiti astronomici."
         )
 
     def generate_response(self, prompt: str) -> str:

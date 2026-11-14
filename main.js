@@ -1976,63 +1976,51 @@ function contextForQuestion(question) {
     })),
   };
 }
-async function askOpenAI(question, calculation) {
-  const response = await fetch("/api/assistant", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      question,
-      context: contextForQuestion(question),
-      calculation,
-      history: conversation.slice(-9, -1),
-    }),
-  });
-  const result = await response.json();
-  if (!response.ok)
-    throw new Error(
-      result.error || "Data non è riuscito a consultare il servizio IA.",
-    );
-  const label = document.getElementById("aiStatus");
-  label.textContent = `IA connessa - ${result.model || "modello attivo"}`;
-  label.classList.add("ready");
-  return result.text;
-}
 async function sendToData(text) {
   const question = text.trim();
   if (!question) return;
+
   chatInput.value = "";
   addMessage(question, "user");
   conversation.push({ role: "user", content: question });
-  if (!apiConfigured) {
-    const notice = "Il servizio IA non risulta configurato. Per ricevere risposte generate da Data, verifichi OPENROUTER_API_KEY nel file .env e riavvii il server.";
-    addMessage(notice, "bot");
-    conversation.push({ role: "assistant", content: notice });
-    return;
-  }
-  const travel = calculateTravel(question);
+
   const thinking = addThinking();
+
   try {
-    const answer = await askOpenAI(question, travel?.calculation || "");
+    const response = await fetch("http://127.0.0.1:8000/query", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query: question,
+        max_results: 3,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+
+    const result = await response.json();
     thinking.remove();
+
+    const answer = result.answer || result.message || "Mi dispiace, non sono riuscito a trovare una risposta.";
     addMessage(answer, "bot");
     conversation.push({ role: "assistant", content: answer });
   } catch (error) {
     thinking.remove();
-    const label = document.getElementById("aiStatus");
-    label.textContent = "IA non raggiungibile";
-    label.classList.remove("ready");
-    const detail = /failed to fetch|networkerror|load failed/i.test(error.message)
-      ? "Il collegamento al server IA non e riuscito. Verifichi che il server sia attivo e riprovi."
-      : error.message;
-    const notice = `Non posso formulare una risposta di Data senza raggiungere il modello IA. ${detail}`;
+    const notice = "Errore di connessione: Non è stato possibile contattare il backend RAG. Assicurati che il server FastAPI sia attivo su http://127.0.0.1:8000.";
     addMessage(notice, "bot");
     conversation.push({ role: "assistant", content: notice });
   }
 }
+
 document.getElementById("dataChatForm").addEventListener("submit", (event) => {
   event.preventDefault();
   sendToData(chatInput.value);
 });
+
 renderSystemNodes();
 const welcome = document.createElement("span");
 welcome.className = "system-welcome";

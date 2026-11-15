@@ -901,8 +901,6 @@ const els = {
   list: document.getElementById("planetList"),
   detail: document.getElementById("planetDetail"),
   topSystem: document.getElementById("topSystem"),
-  ship: document.getElementById("ship"),
-  route: document.querySelector(".route-progress"),
 };
 let activeSystem = "sol";
 let activePlanet = null;
@@ -938,56 +936,8 @@ function closeDetailsPanel() {
 }
 document.getElementById("closeDetailsPanel").addEventListener("click", closeDetailsPanel);
 detailsBackdrop.addEventListener("click", closeDetailsPanel);
-let warpTimer = 0,
-  warpEndTimer = 0;
-
-function renderSystemNodes() {
-  const systemIds = Object.keys(systems),
-    ids = [...systemIds, ...mapObjects.map((item) => item.id), ...probes.map((item) => item.id)],
-    map = document.querySelector(".map-panel"),
-    width = map.clientWidth,
-    height = map.clientHeight;
-  const positions = createOrganicPositions(ids, width, height);
-  const container = document.getElementById("systemNodes");
-  container.querySelectorAll(".system-node").forEach((node) => node.remove());
-  systemIds.forEach((id, index) => {
-    const data = systems[id],
-      node = document.createElement("div"),
-      point = positions[index];
-    node.className = "system-node";
-    node.dataset.system = id;
-    node.style.setProperty("--x", `${point.x}%`);
-    node.style.setProperty("--y", `${point.y}%`);
-    const colorClass =
-      id === "sol" || /G[0-9]/.test(data.star)
-        ? "sun"
-        : /A1|F[0-9]|A[0-9]/.test(data.star)
-          ? "blue-star"
-          : /K[0-9]/.test(data.star)
-            ? "orange-star"
-            : "red-star";
-    node.innerHTML = `<button class="node-orbit" type="button" aria-label="Esplora ${data.shortName}" title="${data.shortName} — ${data.distance} anni luce"><span class="node-star ${colorClass}"></span><span class="node-ring ring-one"></span>${["sol", "alpha", "wolf", "lalande"].includes(id) ? '<span class="node-ring ring-two"></span>' : ""}</button><span class="node-caption"><b>${data.shortName}</b><small>${data.distance} A.L.</small></span>`;
-    node
-      .querySelector("button")
-      .addEventListener("click", () => navigateToSystem(id));
-    container.appendChild(node);
-  });
-  [...mapObjects, ...probes].forEach((item, index) => {
-    const point = positions[systemIds.length + index];
-    const node = document.createElement("div");
-    const isProbe = item.id.startsWith("probe-");
-    node.className = `system-node map-object-node ${isProbe ? "probe" : "black-hole"}`;
-    node.dataset.mapObject = item.id;
-    node.style.setProperty("--x", `${point.x}%`);
-    node.style.setProperty("--y", `${point.y}%`);
-    node.innerHTML = `<button class="object-marker ${isProbe ? "probe-marker" : "blackhole-marker"}" type="button" aria-label="Apri ${item.name}" title="${item.name} · ${item.distance}">${isProbe ? "↗" : "●"}</button><span class="node-caption"><b>${item.name}</b><small>${item.distance}</small></span>`;
-    node.querySelector("button").addEventListener("click", () => isProbe ? openProbe(item.id) : openBlackHole(item.id));
-    container.appendChild(node);
-  });
-  const index = document.getElementById("mapIndex");
-  if (index) index.textContent = `${systemIds.length} SISTEMI · ${mapObjects.length + probes.length} OGGETTI`;
-  drawConstellations(positions, width, height);
-  if (activeMapFilter) applyMapFilterClasses();
+function notifyMapCatalogUpdate() {
+  window.dispatchEvent(new Event("map3d-catalog-updated"));
 }
 
 function openBlackHole(id) {
@@ -1010,17 +960,8 @@ function showMissionCard(item) {
 document.getElementById("missionClose").addEventListener("click", () => document.getElementById("missionDialog").close());
 document.getElementById("missionDialog").addEventListener("click", (event) => { if (event.target === event.currentTarget) event.currentTarget.close(); });
 
-function centerSystemOnMap(id) {
-  const node = document.querySelector(`.system-node[data-system="${id}"]`);
-  if (!node) return;
-  const width = map.clientWidth, height = map.clientHeight;
-  const originX = width * 0.51, originY = height * 0.62;
-  const x = parseFloat(node.style.getPropertyValue("--x")) * width / 100;
-  const y = parseFloat(node.style.getPropertyValue("--y")) * height / 100;
-  panX = width / 2 - (originX + (x - originX) * zoom);
-  panY = height / 2 - (originY + (y - originY) * zoom);
-  applyMapView(id);
-}
+
+
 function selectPlanetByName(name) {
   if (!name) return;
   const button = [...els.list.querySelectorAll(".planet-card")]
@@ -1029,105 +970,14 @@ function selectPlanetByName(name) {
   if (button && planet) showPlanet(planet, button);
 }
 function navigateToSystem(id, planetName = null) {
+  if (!systems[id]) return;
   openDetailsPanel();
-  if (id === activeSystem) {
-    clearTimeout(warpTimer);
-    clearTimeout(warpEndTimer);
-    map.classList.remove("warp", "travelling");
-    centerSystemOnMap(id);
-    renderSystem(id);
-    selectPlanetByName(planetName);
-    return;
-  }
-  map.classList.remove("warp");
-  map.classList.remove("travelling");
-  void map.offsetWidth;
-  clearTimeout(warpTimer);
-  clearTimeout(warpEndTimer);
-  map.classList.add("travelling", "warp");
-  centerSystemOnMap(id);
-  warpTimer = window.setTimeout(() => {
-    renderSystem(id);
-    selectPlanetByName(planetName);
-  }, 360);
-  warpEndTimer = window.setTimeout(() => map.classList.remove("warp", "travelling"), 1150);
-}
-
-function createOrganicPositions(ids, width, height) {
-  const mobile = window.matchMedia("(max-width: 760px)").matches,
-    minDistance = mobile ? 39 : Math.max(50, Math.min(69, width * 0.07));
-  let seed = 20261110;
-  for (const id of ids)
-    for (const char of id) seed = (seed * 31 + char.charCodeAt(0)) >>> 0;
-  const random = () => {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 4294967296;
-  };
-  const placed = [];
-  ids.forEach((id, index) => {
-    if (id === "sol") {
-      placed.push({ id, x: 51, y: 62 });
-      return;
-    }
-    let best = null,
-      bestGap = -1;
-    for (let attempt = 0; attempt < 900; attempt++) {
-      const candidate = { id, x: 6 + random() * 88, y: 34 + random() * 52 };
-      let gap = Infinity;
-      for (const other of placed) {
-        const dx = ((candidate.x - other.x) * width) / 100,
-          dy = ((candidate.y - other.y) * height) / 100;
-        gap = Math.min(gap, Math.hypot(dx, dy));
-      }
-      if (gap > bestGap) {
-        best = candidate;
-        bestGap = gap;
-      }
-      if (gap >= minDistance) break;
-    }
-    if (best) placed.push(best);
-  });
-  return placed;
-}
-
-function drawConstellations(points, width, height) {
-  const svg = document.getElementById("constellationSvg");
-  svg.innerHTML = "";
-  svg.setAttribute("viewBox", "0 0 1000 1000");
-  const connected = new Set([0]);
-  while (connected.size < points.length) {
-    let shortest = Infinity,
-      from = -1,
-      to = -1;
-    for (const i of connected)
-      for (let j = 0; j < points.length; j++)
-        if (!connected.has(j)) {
-          const dx = ((points[i].x - points[j].x) * width) / 100,
-            dy = ((points[i].y - points[j].y) * height) / 100,
-            distance = Math.hypot(dx, dy);
-          if (distance < shortest) {
-            shortest = distance;
-            from = i;
-            to = j;
-          }
-        }
-    if (to < 0) break;
-    const link = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    link.setAttribute("x1", points[from].x * 10);
-    link.setAttribute("y1", points[from].y * 10);
-    link.setAttribute("x2", points[to].x * 10);
-    link.setAttribute("y2", points[to].y * 10);
-    svg.appendChild(link);
-    connected.add(to);
-  }
+  window.dispatchEvent(new CustomEvent("map3d-open-system", { detail: { id } }));
+  renderSystem(id);
+  selectPlanetByName(planetName);
 }
 
 function applyMapFilterClasses() {
-  document.querySelectorAll(".system-node").forEach((node) => {
-    const matches = activeMapFilter?.matches.has(node.dataset.system || node.dataset.mapObject);
-    node.classList.toggle("filter-match", Boolean(matches));
-    node.classList.toggle("filtered-out", Boolean(activeMapFilter && !matches));
-  });
   document.querySelectorAll(".planet-card").forEach((card) => {
     const planet = systems[activeSystem]?.planets.find(
       (item) => item.name === card.dataset.planet,
@@ -1144,13 +994,11 @@ function applyMapFilterClasses() {
       String(button.dataset.planetFilter === activeMapFilter?.kind),
     );
   });
+  window.dispatchEvent(new Event("map3d-filter"));
 }
 
 function clearMapFilter() {
   activeMapFilter = null;
-  document
-    .querySelectorAll(".system-node")
-    .forEach((node) => node.classList.remove("filter-match", "filtered-out"));
   document.querySelectorAll(".planet-card").forEach((card) =>
     card.classList.remove("filter-planet-match", "filter-planet-out"),
   );
@@ -1158,6 +1006,7 @@ function clearMapFilter() {
     button.setAttribute("aria-pressed", "false"),
   );
   document.getElementById("mapFilterNotice").hidden = true;
+  window.dispatchEvent(new Event("map3d-filter"));
 }
 
 function planetMatchesMapFilter(planet, kind) {
@@ -1205,6 +1054,7 @@ function setMapPlanetFilter(kind) {
     }
   }
   activeMapFilter = { matches, kind, maxDistance: Infinity };
+  window.dispatchEvent(new Event("map3d-filter"));
   applyMapFilterClasses();
   panX = 0;
   panY = 0;
@@ -1491,11 +1341,6 @@ function renderSystem(id) {
   activeSystem = id;
   activePlanet = null;
   updateSimilarPlanetOptions(null);
-  document
-    .querySelectorAll(".system-node")
-    .forEach((node) =>
-      node.classList.toggle("active", node.dataset.system === id),
-    );
   els.name.innerHTML = data.name;
   els.description.textContent = data.description;
   els.number.textContent = data.number;
@@ -1528,92 +1373,38 @@ function renderSystem(id) {
   }
   updateChatContext();
   applyMapFilterClasses();
-  positionShip(id);
-  updateMapFocus();
 }
 
-function positionShip(id) {
-  const node = document.querySelector(`.system-node[data-system="${id}"]`);
-  if (!node) return;
-  const nodes = document.getElementById("systemNodes"),
-    width = nodes.clientWidth,
-    height = nodes.clientHeight,
-    x = (parseFloat(node.style.getPropertyValue("--x")) / 100) * width,
-    y = (parseFloat(node.style.getPropertyValue("--y")) / 100) * height;
-  if (id === "sol") {
-    els.ship.style.opacity = "0";
-    els.route.style.width = "0";
-  } else {
-    const home = document.querySelector('.system-node[data-system="sol"]'),
-      hx = (parseFloat(home.style.getPropertyValue("--x")) / 100) * width,
-      hy = (parseFloat(home.style.getPropertyValue("--y")) / 100) * height,
-      dx = x - hx,
-      dy = y - hy;
-    els.ship.style.opacity = "1";
-    els.ship.style.left = `${x - 16}px`;
-    els.ship.style.top = `${y - 16}px`;
-    els.route.style.left = `${hx}px`;
-    els.route.style.top = `${hy}px`;
-    els.route.style.width = `${Math.hypot(dx, dy)}px`;
-    els.route.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
-  }
-  els.ship.style.transform =
-    window.matchMedia("(max-width: 760px)").matches && id !== "sol"
-      ? "scale(.82)"
-      : "";
-}
 
 let zoom = 3;
 const zoomLabel = document.querySelector(".map-controls span");
 const map = document.querySelector(".map-panel");
-const mapLayers = [document.querySelector(".system-nodes"), document.querySelector(".constellation-lines")];
 let panX = 0, panY = 0, pointerStart = null, draggedMap = false;
 const touchPoints = new Map();
 let pinchStart = null;
-function updateMapFocus(systemId = activeSystem) {
-  const node = document.querySelector(`.system-node[data-system="${systemId}"]`);
-  if (!node) return;
-  const width = map.clientWidth, height = map.clientHeight;
-  const originX = width * 0.51, originY = height * 0.62;
-  const x = parseFloat(node.style.getPropertyValue("--x")) * width / 100;
-  const y = parseFloat(node.style.getPropertyValue("--y")) * height / 100;
-  map.style.setProperty("--focus-x", `${originX + (x - originX) * zoom + panX}px`);
-  map.style.setProperty("--focus-y", `${originY + (y - originY) * zoom + panY}px`);
-}
-function applyMapView(focusSystem = activeSystem) {
-  for (const layer of mapLayers) {
-    layer.style.setProperty("--map-zoom", zoom);
-    layer.style.setProperty("--map-pan-x", `${panX}px`);
-    layer.style.setProperty("--map-pan-y", `${panY}px`);
-  }
-  updateMapFocus(focusSystem);
-}
-applyMapView();
-zoomLabel.textContent = `${zoom.toFixed(1)}Ã—`;
+zoomLabel.textContent = `${zoom.toFixed(1)}x`;
+
 function setZoom(next) {
   zoom = Math.max(0.8, Math.min(3.5, +next.toFixed(1)));
-  applyMapView();
   zoomLabel.textContent = `${zoom.toFixed(1)}×`;
-  window.setTimeout(() => positionShip(activeSystem), 260);
 }
 map.addEventListener("wheel", (event) => {
-  if (detailsPanelOpen || event.target.closest(".map-controls, .map-class-filters, .map-filter-notice")) return;
+  if ((detailsPanelOpen && !map.classList.contains("system3d-view")) || event.target.closest(".map-controls, .map-class-filters, .map-filter-notice, .map3d-system-controls")) return;
   event.preventDefault();
   const rect = map.getBoundingClientRect();
   const focusX = event.clientX - rect.left;
   const focusY = event.clientY - rect.top;
-  const originX = map.clientWidth * 0.51, originY = map.clientHeight * 0.62;
-  const worldX = originX + (focusX - originX - panX) / zoom;
-  const worldY = originY + (focusY - originY - panY) / zoom;
+  const originX = map.clientWidth / 2, originY = map.clientHeight / 2;
+  const previousZoom = zoom;
   zoom = Math.max(0.8, Math.min(3.5, zoom * Math.exp(-event.deltaY * 0.0012)));
-  panX = focusX - originX - (worldX - originX) * zoom;
-  panY = focusY - originY - (worldY - originY) * zoom;
-  applyMapView();
-  zoomLabel.textContent = `${zoom.toFixed(1)}Ã—`;
+  const scale = zoom / previousZoom;
+  panX = focusX - originX - (focusX - originX - panX) * scale;
+  panY = focusY - originY - (focusY - originY - panY) * scale;
+  zoomLabel.textContent = `${zoom.toFixed(1)}x`;
 }, { passive: false });
 map.addEventListener("pointerdown", (event) => {
-  if (detailsPanelOpen) return;
-  if (event.button !== 0 || event.target.closest(".map-controls, .map-class-filters, .map-heading, .map-filter-notice, .map-footnote")) return;
+  if (detailsPanelOpen && !map.classList.contains("system3d-view")) return;
+  if (event.button !== 0 || event.target.closest(".map-controls, .map-class-filters, .map-filter-notice, .map3d-system-controls")) return;
   if (event.pointerType === "touch") {
     touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (touchPoints.size === 2) {
@@ -1647,14 +1438,13 @@ window.addEventListener("pointermove", (event) => {
       const distance = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
       const centerX = (points[0].x + points[1].x) / 2 - rect.left;
       const centerY = (points[0].y + points[1].y) / 2 - rect.top;
-      const originX = map.clientWidth * 0.51, originY = map.clientHeight * 0.62;
+      const originX = map.clientWidth / 2, originY = map.clientHeight / 2;
       zoom = Math.max(0.8, Math.min(3.5, pinchStart.zoom * distance / pinchStart.distance));
       const worldX = originX + (pinchStart.centerX - originX - pinchStart.panX) / pinchStart.zoom;
       const worldY = originY + (pinchStart.centerY - originY - pinchStart.panY) / pinchStart.zoom;
       panX = centerX - originX - (worldX - originX) * zoom;
       panY = centerY - originY - (worldY - originY) * zoom;
-      applyMapView();
-      zoomLabel.textContent = `${zoom.toFixed(1)}Ã—`;
+          zoomLabel.textContent = `${zoom.toFixed(1)}Ã—`;
       event.preventDefault();
       return;
     }
@@ -1669,7 +1459,6 @@ window.addEventListener("pointermove", (event) => {
   }
   panX = pointerStart.panX + dx;
   panY = pointerStart.panY + dy;
-  applyMapView();
 });
 function finishMapDrag(event) {
   if (touchPoints.has(event.pointerId)) {
@@ -1706,7 +1495,8 @@ document
 document.getElementById("resetMap").addEventListener("click", () => {
   panX = 0;
   panY = 0;
-  setZoom(1);
+  setZoom(3);
+  window.dispatchEvent(new Event("map3d-show-galaxy"));
   renderSystem("sol");
 });
 window.addEventListener("resize", () => {
@@ -1717,10 +1507,6 @@ window.addEventListener("resize", () => {
     detailsPanel.removeAttribute("aria-hidden");
     detailsPanel.removeAttribute("aria-modal");
   }
-  renderSystemNodes();
-  renderSystem(activeSystem);
-  centerSystemOnMap(activeSystem);
-  applyMapView();
 });
 
 const filterMenu = document.querySelector(".map-class-filters");
@@ -2021,10 +1807,30 @@ document.getElementById("dataChatForm").addEventListener("submit", (event) => {
   sendToData(chatInput.value);
 });
 
-renderSystemNodes();
-const welcome = document.createElement("span");
-welcome.className = "system-welcome";
-welcome.textContent = "Benvenuto viandante e buon viaggio interstellare!";
-document.querySelector('.system-node[data-system="sol"]')?.append(welcome);
-window.setTimeout(() => welcome.remove(), 3000);
+async function loadExpandedExoplanetCatalog() {
+  try {
+    const response = await fetch("/api/exoplanets");
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    let added = 0;
+    for (const system of payload.systems || []) {
+      if (!system.id || systems[system.id]) continue;
+      systems[system.id] = system;
+      added++;
+    }
+    if (!added) return;
+    notifyMapCatalogUpdate();
+    const count = document.getElementById("catalogSystemCount");
+    if (count) count.textContent = `${Object.keys(systems).length} SISTEMI · NASA EXOPLANET ARCHIVE`;
+    const status = document.getElementById("catalogStatus");
+    if (status) status.textContent = `${added} sistemi extrasolari caricati · aggiornamento ${new Date(payload.updatedAt).toLocaleDateString("it-IT")}`;
+  } catch (error) {
+    console.warn("Catalogo esteso degli esopianeti non disponibile:", error.message);
+    const status = document.getElementById("catalogStatus");
+    if (status) status.textContent = "Catalogo extrasolare temporaneamente non raggiungibile.";
+  }
+}
+
+notifyMapCatalogUpdate();
 renderSystem("sol");
+loadExpandedExoplanetCatalog();

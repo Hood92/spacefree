@@ -30,6 +30,18 @@
   right: 28px;
   max-width: 68%;
 }
+.catalog-count {
+  display: block;
+  margin: 0 2px 7px auto;
+  color: #6f8b96;
+  font: 7px var(--mono);
+  letter-spacing: .06em;
+  text-align: right;
+}
+.catalog-status {
+  color: #718b96;
+  font: 7px/1.4 "DM Mono", monospace;
+}
 .map-filter-toggle { display: none; }
 .map-filter-options {
   display: flex;

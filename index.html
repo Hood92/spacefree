@@ -8,6 +8,7 @@
       name="description"
       content="Una mappa interattiva dei sistemi planetari più vicini alla Terra."
     />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <title>Orbite — atlante stellare</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -60,36 +61,7 @@
       <button class="details-backdrop" id="detailsBackdrop" type="button" aria-label="Chiudi dettagli" hidden></button>
       <main class="dashboard" id="home">
         <section class="map-panel" aria-label="Mappa dei sistemi stellari">
-          <div class="map-grain"></div>
-          <div class="starfield" aria-hidden="true"></div>
-          <div class="map-heading">
-            <div>
-              <div class="eyebrow">
-                <span class="eyebrow-line"></span> MAPPATURA INTERSTELLARE
-                <span class="eyebrow-index" id="mapIndex"
-                  >26 SISTEMI · 13 OGGETTI</span
-                >
-              </div>
-              <h1>Il vicinato<br /><span>stellare.</span></h1>
-              <p class="map-intro">
-                Sistemi, buchi neri e sonde tra i vicini galattici.<br />Il
-                prossimo salto è tuo.
-              </p>
-            </div>
-            <div class="distance-chip">
-              <span class="distance-icon">✳</span
-              ><span
-                ><small>ATLANTE ESTESO</small
-                ><strong>Vicino <em>e profondo</em></strong></span
-              >
-            </div>
-          </div>
-          <svg
-            class="constellation-lines"
-            id="constellationSvg"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          ></svg>
+           <div id="map-container"></div>
           <div
             class="map-class-filters"
           >
@@ -97,6 +69,8 @@
               <span class="hamburger-icon" aria-hidden="true"><i></i><i></i><i></i></span>
               <span>FILTRI ATLANTE</span>
             </button>
+            <span class="catalog-count" id="catalogSystemCount">26 sistemi catalogati</span>
+            <span class="catalog-status" id="catalogStatus">Catalogo NASA in caricamento…</span>
             <div class="map-filter-options" id="mapFilterOptions" role="group" aria-label="Filtra sistemi, pianeti, buchi neri e sonde">
             <button type="button" data-planet-filter="rocky">Rocciosi</button>
             <button type="button" data-planet-filter="gas">Gassosi</button>
@@ -121,21 +95,8 @@
             <button type="button" id="resetPlanetFilters">Reset</button>
             </div>
           </div>
-          <div class="system-nodes" id="systemNodes">
-            <div class="route-line" aria-hidden="true">
-            <span class="route-progress"></span
-            ><span class="ship" id="ship"
-              ><svg viewBox="0 0 42 42">
-                <path
-                  d="M21 3c8 8 12 19 12 29l-12-6-12 6C9 22 13 11 21 3Z"
-                  fill="#b8f93a"
-                />
-                <path d="m17 29-3 9 7-5 7 5-3-9" fill="#77c938" />
-                <circle cx="21" cy="18" r="3" fill="#061523" /></svg
-            ></span>
-            </div>
-          </div>
-          <div class="map-vignette" aria-hidden="true"></div>
+
+
           <div class="map-filter-notice" id="mapFilterNotice" hidden>
             <span class="filter-notice-icon">⌕</span
             ><span id="mapFilterText"></span
@@ -168,11 +129,7 @@
               </svg>
             </button>
           </div>
-          <div class="map-footnote">
-            <span class="footnote-mark">✳</span> POSIZIONI SCHEMATICHE
-            <span class="footnote-divider">·</span> DISTANZE REALI NELLE
-            ETICHETTE
-          </div>
+
         </section>
 
         <aside
@@ -232,6 +189,41 @@
           </div>
         </aside>
       </main>
+      <section class="earth-orbit-section" id="earth-orbit" aria-labelledby="earthOrbitTitle">
+        <header class="earth-orbit-header">
+          <div>
+            <span class="earth-orbit-kicker">ATLANTE ORBITALE · DATI CATALOGATI</span>
+            <h2 id="earthOrbitTitle">La Terra <span>in orbita.</span></h2>
+            <p>Satelliti e detriti tracciabili attorno al nostro pianeta, con posizioni propagate dagli elementi orbitali più recenti.</p>
+          </div>
+          <div class="earth-orbit-source"><span id="earthCatalogStatus">CelesTrak: in attesa dei dati</span><br>ELEMENTI ORBITALI AGGIORNATI SECONDO IL CATALOGO<br><a href="https://celestrak.org/" target="_blank" rel="noopener noreferrer">FONTE: CELESTRAK ↗</a></div>
+        </header>
+        <div class="earth-orbit-filters" role="group" aria-label="Categoria di oggetti in orbita">
+          <button type="button" data-orbit-group="stations" aria-pressed="false">Stazioni</button>
+          <button type="button" data-orbit-group="visual" aria-pressed="false">Satelliti visibili</button>
+          <button type="button" data-orbit-group="active" aria-pressed="true">Attivi</button>
+          <button type="button" data-orbit-group="debris" aria-pressed="false">Detriti catalogati</button>
+        </div>
+        <div class="earth-orbit-layout">
+          <div class="earth-orbit-stage" id="earth-orbit-stage">
+            <div id="earth-orbit-canvas" aria-label="Globo 3D con satelliti in orbita"></div>
+            <div class="earth-orbit-hud"><strong id="earth-object-count">In attesa dei dati orbitali…</strong><span id="earth-orbit-status">Le posizioni saranno calcolate all'apertura della sezione.</span><button id="earth-orbit-retry" type="button" hidden>Riprova a caricare</button></div>
+            <div class="earth-orbit-help">TRASCINA PER RUOTARE · ROTELLA PER ZOOM · CLICCA UN OGGETTO</div>
+          </div>
+          <aside class="earth-object-panel" aria-live="polite">
+            <span class="earth-orbit-kicker">OGGETTO SELEZIONATO</span>
+            <h3 id="earth-object-name">Nessun satellite selezionato</h3>
+            <dl>
+              <div><dt>CATALOGO</dt><dd id="earth-object-catalog">—</dd></div>
+              <div><dt>INCLINAZIONE</dt><dd id="earth-object-inclination">—</dd></div>
+              <div><dt>PERIODO ORBITALE</dt><dd id="earth-object-period">—</dd></div>
+              <div><dt>EPOCA ELEMENTI</dt><dd id="earth-object-epoch">—</dd></div>
+            </dl>
+            <p id="earth-object-note">I punti rappresentano gli oggetti presenti nel gruppo scelto; selezionane uno sul globo per consultarne i dati.</p>
+            <small>La posizione è una propagazione SGP4 degli elementi orbitali, non telemetria in tempo reale.</small>
+          </aside>
+        </div>
+      </section>
       <footer class="bottom-bar">
         <span>© 2025 ORBITE EXPLORATION</span
         ><span>ESPLORA CON CURIOSITÀ <i>✳</i></span
@@ -327,5 +319,9 @@
       <div id="missionContent" class="missionBubble"></div>
     </dialog>
     <script src="main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r158/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="earth-orbit.js"></script>
+    <script src="map3d.js"></script>
   </body>
 </html>

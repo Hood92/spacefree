@@ -157,13 +157,7 @@ body {
   position: relative;
   min-height: 690px;
   overflow: hidden;
-  background:
-    radial-gradient(
-      ellipse at 57% 53%,
-      rgba(13, 46, 58, 0.46),
-      transparent 57%
-    ),
-    linear-gradient(132deg, #071722, #06131e 75%);
+  background: #04111d;
   isolation: isolate;
   cursor: grab;
   touch-action: none;
@@ -1599,4 +1593,217 @@ body {
     9px/1.6 "DM Mono",
     monospace;
   text-align: center;
+}
+#map-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: auto;
+}
+#map-container canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.map3d-label {
+  position: absolute;
+  z-index: 2;
+  color: rgba(222, 239, 240, 0.78);
+  font: 8px/1.2 "DM Mono", monospace;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(8px, -50%);
+  text-shadow: 0 1px 5px #04111d, 0 0 9px #04111d;
+}
+.map-heading,
+.map-grain,
+.map-panel > .starfield,
+.map-panel > .constellation-lines,
+.map-panel > .system-nodes,
+.map-panel > .map-vignette,
+.map-panel > .map-footnote {
+  display: none !important;
+}
+.map-panel.system3d-view .map-heading,
+.map-panel.system3d-view .map-class-filters,
+.map-panel.system3d-view .map-filter-notice,
+.map-panel.system3d-view .map-footnote {
+  display: none;
+}
+.map-panel.system3d-view .map3d-star-label {
+  display: none !important;
+}
+.map3d-system-controls {
+  position: absolute;
+  z-index: 6;
+  top: 22px;
+  left: 24px;
+  right: 24px;
+  display: none;
+  align-items: flex-start;
+  gap: 20px;
+  color: #e9f4f3;
+  pointer-events: none;
+}
+.map-panel.system3d-view .map3d-system-controls {
+  display: flex;
+}
+.map3d-system-controls button {
+  padding: 9px 12px;
+  border: 1px solid rgba(157, 193, 202, 0.25);
+  border-radius: 5px;
+  background: rgba(5, 20, 31, 0.86);
+  color: #c4d7d9;
+  font: 9px "DM Mono", monospace;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.map3d-system-controls button:hover {
+  border-color: #b8f93a;
+  color: #b8f93a;
+}
+.map3d-system-heading {
+  display: grid;
+  gap: 5px;
+  padding-top: 2px;
+  text-shadow: 0 1px 8px #04111d;
+}
+.map3d-system-heading strong {
+  font: 600 18px "Space Grotesk", sans-serif;
+}
+.map3d-system-heading small {
+  color: #8fa9b2;
+  font: 8px "DM Mono", monospace;
+  letter-spacing: 0.08em;
+}
+.map3d-body-label {
+  color: #e5f4dc;
+  font-size: 9px;
+}
+.map3d-no-planets {
+  position: absolute;
+  z-index: 3;
+  top: 76px;
+  left: 24px;
+  padding: 9px 12px;
+  border: 1px solid rgba(157, 193, 202, 0.2);
+  border-radius: 5px;
+  background: rgba(5, 20, 31, 0.76);
+  color: #a8bdc3;
+  font: 9px "DM Mono", monospace;
+}
+.earth-orbit-section {
+  margin: 28px 0 52px;
+  padding: clamp(20px, 3vw, 38px);
+  border: 1px solid rgba(139, 187, 196, 0.14);
+  border-radius: 12px;
+  background: linear-gradient(145deg, #071a27, #04111d 74%);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.2);
+}
+.earth-orbit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+}
+.earth-orbit-kicker,
+.earth-orbit-source,
+.earth-orbit-help {
+  color: #86a2ac;
+  font: 8px/1.7 "DM Mono", monospace;
+  letter-spacing: 0.08em;
+}
+.earth-orbit-header h2 {
+  margin-top: 8px;
+  color: #f0f5f4;
+  font: 600 clamp(26px, 3vw, 40px)/1.1 "Space Grotesk", sans-serif;
+}
+.earth-orbit-header h2 span { color: var(--lime); }
+.earth-orbit-header p {
+  max-width: 630px;
+  margin-top: 10px;
+  color: #98adb5;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.earth-orbit-source { flex: 0 0 auto; text-align: right; }
+.earth-orbit-source a { color: #b8f93a; text-decoration: none; }
+.earth-orbit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 20px 0 14px;
+}
+.earth-orbit-filters button {
+  padding: 8px 11px;
+  border: 1px solid rgba(137, 183, 191, 0.2);
+  border-radius: 999px;
+  background: rgba(6, 22, 33, 0.8);
+  color: #9db3bb;
+  font: 8px "DM Mono", monospace;
+  cursor: pointer;
+}
+.earth-orbit-filters button[aria-pressed="true"] {
+  border-color: rgba(184, 249, 58, 0.65);
+  color: var(--lime);
+}
+.earth-orbit-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 270px;
+  min-height: 410px;
+  overflow: hidden;
+  border: 1px solid rgba(139, 187, 196, 0.13);
+  border-radius: 8px;
+  background: #030e17;
+}
+.earth-orbit-stage { position: relative; min-width: 0; min-height: 410px; overflow: hidden; }
+#earth-orbit-canvas { position: absolute; inset: 0; }
+#earth-orbit-canvas canvas { display: block; width: 100%; height: 100%; }
+.earth-orbit-hud {
+  position: absolute;
+  z-index: 2;
+  top: 16px;
+  left: 18px;
+  display: grid;
+  gap: 5px;
+  pointer-events: none;
+}
+.earth-orbit-hud strong { color: #e3efec; font: 10px "DM Mono", monospace; }
+.earth-orbit-hud span { color: #829ba5; font: 8px "DM Mono", monospace; }
+.earth-orbit-hud button {
+  width: fit-content;
+  padding: 6px 9px;
+  border: 1px solid rgba(184, 249, 58, 0.45);
+  border-radius: 4px;
+  background: rgba(5, 20, 31, 0.92);
+  color: var(--lime);
+  font: 8px "DM Mono", monospace;
+  cursor: pointer;
+}
+.earth-orbit-hud button[hidden] { display: none; }
+.earth-orbit-help { position: absolute; right: 16px; bottom: 13px; pointer-events: none; }
+.earth-object-panel {
+  padding: 22px 18px;
+  border-left: 1px solid rgba(139, 187, 196, 0.13);
+  background: #071722;
+}
+.earth-object-panel h3 { margin: 8px 0 18px; color: #e9f1ef; font: 600 16px "Space Grotesk", sans-serif; }
+.earth-object-panel dl { display: grid; gap: 12px; margin: 0; }
+.earth-object-panel dl div { display: flex; justify-content: space-between; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(139, 187, 196, 0.1); }
+.earth-object-panel dt { color: #718b96; font: 7px "DM Mono", monospace; }
+.earth-object-panel dd { margin: 0; color: #d3e2df; font: 8px "DM Mono", monospace; text-align: right; }
+.earth-object-panel p { margin: 16px 0 10px; color: #9aafb5; font-size: 10px; line-height: 1.6; }
+.earth-object-panel > small { color: #6f8992; font: 8px/1.6 "DM Mono", monospace; }
+@media (max-width: 800px) {
+  .earth-orbit-header { align-items: flex-start; flex-direction: column; }
+  .earth-orbit-source { text-align: left; }
+  .earth-orbit-layout { grid-template-columns: 1fr; }
+  .earth-object-panel { border-left: 0; border-top: 1px solid rgba(139, 187, 196, 0.13); }
+}
+.map-panel.map3d-ready > .system-nodes,
+.map-panel.map3d-ready > .constellation-lines {
+  display: none;
 }

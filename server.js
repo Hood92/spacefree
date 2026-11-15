@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("node:path");
+const fs = require("node:fs/promises");
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -18,11 +19,17 @@ const ALLOWED_FILES = new Set([
   "style.css",
   "features.css",
   "main.js",
+  "map3d.js",
+  "earth-orbit.js",
+  "favicon.svg",
   "data.jpg",
   "startrek.png",
 ]);
 const requestTimes = new Map();
 const localOrigins = [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`];
+const externalCache = new Map();
+const externalRequests = new Map();
+const CACHE_DIR = path.join(__dirname, ".cache");
 const allowedOrigins = [
   ...localOrigins,
   ...(process.env.CORS_ORIGIN || "")
@@ -30,6 +37,67 @@ const allowedOrigins = [
     .map((origin) => origin.trim())
     .filter(Boolean),
 ];
+
+async function readExternalCache(key) {
+  if (externalCache.has(key)) return externalCache.get(key);
+  try {
+    const value = JSON.parse(await fs.readFile(path.join(CACHE_DIR, `${key}.json`), "utf8"));
+    externalCache.set(key, value);
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+async function getCachedExternalJson(key, url, ttlMs) {
+  const cached = await readExternalCache(key);
+  if (cached && Date.now() - cached.checkedAt < ttlMs) return { ...cached, stale: Date.now() - cached.fetchedAt >= ttlMs };
+  if (externalRequests.has(key)) return externalRequests.get(key);
+
+  const request = (async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+    try {
+      const response = await fetch(url, { signal: controller.signal, headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error(`Provider HTTP ${response.status}`);
+      const data = await response.json();
+      const record = { data, fetchedAt: Date.now(), checkedAt: Date.now() };
+      externalCache.set(key, record);
+      try {
+        await fs.mkdir(CACHE_DIR, { recursive: true });
+        await fs.writeFile(path.join(CACHE_DIR, `${key}.json`), JSON.stringify(record), "utf8");
+      } catch (cacheError) {
+        console.warn(`Cache locale ${key} non scrivibile:`, cacheError.message);
+      }
+      return { ...record, stale: false };
+    } catch (error) {
+      if (!cached) throw error;
+      const fallback = { ...cached, checkedAt: Date.now() };
+      externalCache.set(key, fallback);
+      await fs.mkdir(CACHE_DIR, { recursive: true }).catch(() => {});
+      await fs.writeFile(path.join(CACHE_DIR, `${key}.json`), JSON.stringify(fallback), "utf8").catch(() => {});
+      return { ...fallback, stale: true };
+    } finally {
+      clearTimeout(timeout);
+      externalRequests.delete(key);
+    }
+  })();
+  externalRequests.set(key, request);
+  return request;
+}
+
+function rowsFromTap(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data) && Array.isArray(payload?.metadata)) {
+    const columns = payload.metadata.map((item) => String(item.name).toLowerCase());
+    return payload.data.map((values) => Object.fromEntries(columns.map((column, index) => [column, values[index]])));
+  }
+  return [];
+}
+
+function safeCatalogText(value, max = 180) {
+  return String(value ?? "").replace(/[<>"'&\u0000-\u001f]/g, "").slice(0, max);
+}
 
 app.disable("x-powered-by");
 app.use(
@@ -65,6 +133,91 @@ app.get("/api/status", (_req, res) => {
     model: PRIMARY_MODEL,
     fallbackModel: FALLBACK_MODEL,
   });
+});
+
+app.get("/api/exoplanets", async (_req, res) => {
+  const query = "select top 1800 pl_name,hostname,pl_rade,pl_bmasse,pl_orbsmax,pl_orbper,st_spectype,sy_dist from ps where default_flag=1 and sy_dist is not null order by sy_dist asc";
+  const url = new URL("https://exoplanetarchive.ipac.caltech.edu/TAP/sync");
+  url.searchParams.set("query", query);
+  url.searchParams.set("format", "json");
+  try {
+    const cached = await getCachedExternalJson("nasa-exoplanets", url, 12 * 60 * 60 * 1000);
+    const grouped = new Map();
+    for (const row of rowsFromTap(cached.data)) {
+      const hostname = safeCatalogText(row.hostname, 80).trim();
+      const planetName = safeCatalogText(row.pl_name, 90).trim();
+      if (!hostname || !planetName) continue;
+      if (!grouped.has(hostname) && grouped.size >= 200) continue;
+      if (!grouped.has(hostname)) grouped.set(hostname, { hostname, planets: [], row });
+      const radius = Number(row.pl_rade);
+      const mass = Number(row.pl_bmasse);
+      const semiMajor = Number(row.pl_orbsmax);
+      const period = Number(row.pl_orbper);
+      const type = Number.isFinite(radius)
+        ? radius < 1.6 ? "Esopianeta roccioso" : radius < 4 ? "Esopianeta · super-Terra" : radius < 8 ? "Esopianeta ghiacciato" : "Esopianeta gigante gassoso"
+        : "Esopianeta confermato";
+      const color = type.includes("roccioso") ? "#c99a72" : type.includes("gassoso") ? "#d9b078" : type.includes("ghiacciato") ? "#87c6d4" : "#ad9ee3";
+      grouped.get(hostname).planets.push({
+        name: planetName,
+        color,
+        type,
+        diameter: [Number.isFinite(radius) ? `${radius.toFixed(2)} R⊕` : "", Number.isFinite(mass) ? `${mass.toFixed(2)} M⊕` : ""].filter(Boolean).join(" · ") || "Non misurati",
+        year: Number.isFinite(period) ? `${period.toFixed(2)} giorni` : "Non noto",
+        distance: Number.isFinite(semiMajor) ? `${semiMajor.toPrecision(3)} UA` : "Orbita non determinata",
+        description: "Esopianeta confermato. Parametri osservativi dal NASA Exoplanet Archive; i valori non pubblicati restano indicati come non noti.",
+      });
+    }
+    const systems = [...grouped.values()].map(({ hostname, planets, row }, index) => {
+      const slug = hostname.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 64) || `system-${index + 1}`;
+      const distance = Number(row.sy_dist);
+      const lightYears = Number.isFinite(distance) ? (distance * 3.26156).toFixed(2) : "n.d.";
+      return {
+        id: `exo-${slug}`,
+        shortName: hostname,
+        name: `${hostname}<span>.</span>`,
+        description: `Sistema extrasolare con ${planets.length} pianet${planets.length === 1 ? "a confermato" : "i confermati"}, catalogato dal NASA Exoplanet Archive. Le orbite mostrate sono schematiche.`,
+        distance: lightYears,
+        star: safeCatalogText(row.st_spectype || "Stella catalogata", 40),
+        starType: "catalogata",
+        count: String(planets.length).padStart(2, "0"),
+        planets,
+      };
+    });
+    res.set("Cache-Control", "public, max-age=3600").json({ systems, source: "NASA Exoplanet Archive", updatedAt: new Date(cached.fetchedAt).toISOString(), stale: cached.stale });
+  } catch (error) {
+    console.error("Catalogo NASA non disponibile:", error.message);
+    res.status(502).json({ error: "Catalogo NASA temporaneamente non disponibile." });
+  }
+});
+
+const ORBITAL_GROUPS = new Set(["stations", "visual", "active", "debris", "fengyun-1c-debris", "cosmos-2251-debris", "iridium-33-debris"]);
+app.get("/api/orbital-objects", async (req, res) => {
+  const group = String(req.query.group || "stations").toLowerCase();
+  if (!ORBITAL_GROUPS.has(group)) return res.status(400).json({ error: "Gruppo orbitale non valido." });
+  const limit = Math.max(1, Math.min(12000, Number.parseInt(req.query.limit, 10) || 12000));
+  try {
+    const groups = group === "debris" ? ["fengyun-1c-debris", "cosmos-2251-debris", "iridium-33-debris"] : [group];
+    const collections = await Promise.all(groups.map((name) => {
+      const url = new URL("https://celestrak.org/NORAD/elements/gp.php");
+      url.searchParams.set("GROUP", name.toUpperCase());
+      url.searchParams.set("FORMAT", "JSON");
+      return getCachedExternalJson(`celestrak-${name}`, url, 2 * 60 * 60 * 1000);
+    }));
+    const unique = new Map();
+    for (const collection of collections) {
+      for (const object of Array.isArray(collection.data) ? collection.data : []) {
+        const id = object.NORAD_CAT_ID ?? object.OBJECT_ID ?? object.OBJECT_NAME;
+        if (id != null && !unique.has(String(id))) unique.set(String(id), object);
+      }
+    }
+    const allObjects = [...unique.values()];
+    const fetchedAt = Math.min(...collections.map((item) => item.fetchedAt));
+    const stale = collections.some((item) => item.stale);
+    res.set("Cache-Control", "public, max-age=7200").json({ group, objects: allObjects.slice(0, limit), total: allObjects.length, updatedAt: new Date(fetchedAt).toISOString(), stale, source: "CelesTrak" });
+  } catch (error) {
+    console.error(`Dati orbitali CelesTrak (${group}) non disponibili:`, error.message);
+    res.status(502).json({ error: "Dati orbitali temporaneamente non disponibili. Riprova più tardi." });
+  }
 });
 
 app.post("/api/assistant", async (req, res) => {

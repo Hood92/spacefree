@@ -345,14 +345,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (touchNavigationDefault && mapOrbitToggle) {
     mapOrbitToggle.setAttribute("aria-pressed", "true");
     mapOrbitToggle.setAttribute("aria-label", "Disattiva i controlli touch e riattiva lo scorrimento della pagina");
-    mapOrbitToggle.title = "Trascina per spostare la mappa, usa due dita per lo zoom; premi per scorrere la pagina";
+    mapOrbitToggle.title = "Trascina con un dito per ruotare; usa due dita per zoom e pan; premi per scorrere la pagina";
     renderer.domElement.style.touchAction = "none";
   }
   mapOrbitToggle?.addEventListener("click", () => {
     const enabled = mapOrbitToggle.getAttribute("aria-pressed") !== "true";
     mapOrbitToggle.setAttribute("aria-pressed", String(enabled));
-    mapOrbitToggle.setAttribute("aria-label", enabled ? "Disattiva i controlli touch e riattiva lo scorrimento della pagina" : "Attiva pan con un dito e zoom con due dita");
-    mapOrbitToggle.title = enabled ? "Trascina per spostare la mappa, usa due dita per lo zoom; premi per scorrere la pagina" : "Attiva pan con un dito e pinch-to-zoom";
+    mapOrbitToggle.setAttribute("aria-label", enabled ? "Disattiva i controlli touch e riattiva lo scorrimento della pagina" : "Attiva rotazione con un dito e zoom e pan con due dita");
+    mapOrbitToggle.title = enabled ? "Trascina con un dito per ruotare; usa due dita per zoom e pan; premi per scorrere la pagina" : "Attiva rotazione con un dito e pinch-to-zoom con due dita";
     renderer.domElement.style.touchAction = enabled ? "none" : "pan-y";
   });
   renderer.domElement.addEventListener("pointerdown", (event) => {
@@ -383,7 +383,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           worldY: originY + (centerY - originY - (typeof panY === "number" ? panY : 0)) / Math.max(0.12, typeof zoom === "number" ? zoom : 0.2),
         };
       } else {
-        touchGesture = { mode: "pan", id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+        touchGesture = { mode: "rotate", id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
       }
       return;
     }
@@ -418,14 +418,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         panY = centerY - originY - (touchGesture.worldY - originY) * zoom;
         if (typeof clampMapPan === "function") clampMapPan();
         zoomLabel.textContent = `${zoom.toFixed(2)}×`;
-      } else if (touchGesture?.mode === "pan" && touchGesture.id === event.pointerId) {
+      } else if (touchGesture?.mode === "rotate" && touchGesture.id === event.pointerId) {
         const dx = event.clientX - touchGesture.x;
         const dy = event.clientY - touchGesture.y;
         if (Math.hypot(dx, dy) > 3) touchGesture.moved = true;
         if (touchGesture.moved) {
-          if (typeof panX === "number") panX += dx;
-          if (typeof panY === "number") panY += dy;
-          if (typeof clampMapPan === "function") clampMapPan();
+          const rotationTarget = activeSystemView ? systemGroup : galaxyGroup;
+          rotationTarget.rotation.y += dx * 0.005;
+          rotationTarget.rotation.x += dy * 0.005;
           touchGesture.x = event.clientX;
           touchGesture.y = event.clientY;
         }
@@ -460,7 +460,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       touchPointers.delete(event.pointerId);
       if (touchPointers.size === 1) {
         const [remainingId, point] = [...touchPointers.entries()][0];
-        touchGesture = { mode: "pan", id: remainingId, x: point.x, y: point.y, moved: wasPinching };
+        touchGesture = { mode: "rotate", id: remainingId, x: point.x, y: point.y, moved: wasPinching };
       } else if (touchPointers.size === 0) {
         suppressMapClick = Boolean(touchGesture?.moved || wasPinching);
         touchGesture = null;

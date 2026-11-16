@@ -62,6 +62,22 @@
       <main class="dashboard" id="home">
         <section class="map-panel" aria-label="Mappa dei sistemi stellari">
            <div id="map-container"></div>
+          <aside class="map3d-hud" aria-label="Legenda dei controlli della mappa 3D">
+            <strong>COMANDI ATLANTE</strong>
+            <span>Trascina · ruota la galassia</span>
+            <span>W A S D / frecce · piano X/Z</span>
+            <span>Q / E · quota verticale Y</span>
+            <span>Tasto destro · sposta la vista</span>
+            <span>Rotella · zoom</span>
+            <span>Click su stella o nome · viaggia</span>
+          </aside>
+          <aside class="filter-summary-panel" id="filterSummaryPanel" aria-live="polite" hidden>
+            <div class="filter-summary-heading">
+              <div><strong id="filterSummaryTitle">RISULTATI FILTRO</strong><small id="filterSummaryCount"></small></div>
+              <button id="filterSummaryClose" type="button" aria-label="Chiudi riepilogo filtro">×</button>
+            </div>
+            <div class="filter-summary-list" id="filterSummaryList"></div>
+          </aside>
           <div
             class="map-class-filters"
           >
@@ -112,6 +128,7 @@
             <button id="zoomOut" aria-label="Riduci zoom">−</button
             ><span>1.0×</span
             ><button id="zoomIn" aria-label="Aumenta zoom">+</button
+            ><button id="mapOrbitToggle" class="map-orbit-toggle" type="button" aria-pressed="false" aria-label="Attiva rotazione touch della mappa" title="Ruota la mappa con un dito; disattiva per scorrere la pagina">&#8635;</button
             ><span class="controls-divider"></span
             ><button
               id="resetMap"
@@ -139,6 +156,11 @@
           <div class="panel-topline">
             <span><i class="live-dot"></i> ARCHIVIO ESPLORATIVO</span>
             <button class="details-close" id="closeDetailsPanel" type="button" aria-label="Chiudi dettagli">×</button>
+          </div>
+          <div class="planet-search-control">
+            <label for="planetSearch">CERCA UN PIANETA · POI AVVIA IL VIAGGIO</label>
+            <input id="planetSearch" type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="planetSearchResults" placeholder="Nome o iniziali del pianeta" autocomplete="off">
+            <div id="planetSearchResults" class="planet-search-results" role="listbox" hidden></div>
           </div>
           <div class="similar-planet-control">
             <label for="similarPlanetSelect">VIAGGIA VERSO UN MONDO SIMILE</label>

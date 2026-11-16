@@ -136,7 +136,7 @@ app.get("/api/status", (_req, res) => {
 });
 
 app.get("/api/exoplanets", async (_req, res) => {
-  const query = "select top 1800 pl_name,hostname,pl_rade,pl_bmasse,pl_orbsmax,pl_orbper,st_spectype,sy_dist from ps where default_flag=1 and sy_dist is not null order by sy_dist asc";
+  const query = "select pl_name,hostname,pl_rade,pl_bmasse,pl_orbsmax,pl_orbper,st_spectype,sy_dist,ra,dec from ps where default_flag=1 and sy_dist is not null order by sy_dist asc";
   const url = new URL("https://exoplanetarchive.ipac.caltech.edu/TAP/sync");
   url.searchParams.set("query", query);
   url.searchParams.set("format", "json");
@@ -147,7 +147,6 @@ app.get("/api/exoplanets", async (_req, res) => {
       const hostname = safeCatalogText(row.hostname, 80).trim();
       const planetName = safeCatalogText(row.pl_name, 90).trim();
       if (!hostname || !planetName) continue;
-      if (!grouped.has(hostname) && grouped.size >= 200) continue;
       if (!grouped.has(hostname)) grouped.set(hostname, { hostname, planets: [], row });
       const radius = Number(row.pl_rade);
       const mass = Number(row.pl_bmasse);
@@ -171,12 +170,16 @@ app.get("/api/exoplanets", async (_req, res) => {
       const slug = hostname.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 64) || `system-${index + 1}`;
       const distance = Number(row.sy_dist);
       const lightYears = Number.isFinite(distance) ? (distance * 3.26156).toFixed(2) : "n.d.";
+      const ra = row.ra == null || row.ra === "" ? null : Number(row.ra);
+      const dec = row.dec == null || row.dec === "" ? null : Number(row.dec);
       return {
         id: `exo-${slug}`,
         shortName: hostname,
         name: `${hostname}<span>.</span>`,
         description: `Sistema extrasolare con ${planets.length} pianet${planets.length === 1 ? "a confermato" : "i confermati"}, catalogato dal NASA Exoplanet Archive. Le orbite mostrate sono schematiche.`,
         distance: lightYears,
+        ra: Number.isFinite(ra) ? ra : null,
+        dec: Number.isFinite(dec) ? dec : null,
         star: safeCatalogText(row.st_spectype || "Stella catalogata", 40),
         starType: "catalogata",
         count: String(planets.length).padStart(2, "0"),

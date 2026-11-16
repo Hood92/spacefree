@@ -477,6 +477,20 @@ body {
 .map-controls button:hover {
   color: var(--lime);
 }
+.map-controls .map-orbit-toggle {
+  display: none;
+  width: auto;
+  min-width: 28px;
+  padding: 0 5px;
+  border: 1px solid rgba(157, 193, 202, 0.24);
+  border-radius: 4px;
+  font-size: 16px;
+}
+.map-controls .map-orbit-toggle[aria-pressed="true"] {
+  color: var(--lime);
+  border-color: var(--lime);
+  background: rgba(184, 249, 58, 0.1);
+}
 .map-controls .controls-divider {
   height: 16px;
   width: 1px;
@@ -544,6 +558,66 @@ body {
   padding-bottom: 14px;
   border-bottom: 1px solid var(--line);
 }
+.planet-search-control {
+  position: relative;
+  display: grid;
+  gap: 7px;
+  margin-top: 15px;
+  z-index: 8;
+}
+.planet-search-control label {
+  color: #7895a3;
+  font: 8px var(--mono);
+  letter-spacing: .8px;
+}
+.planet-search-control input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(137, 183, 191, .22);
+  border-radius: 5px;
+  outline: none;
+  background: #071a27;
+  color: #d4e5e6;
+  font: 10px var(--font);
+}
+.planet-search-control input:focus-visible {
+  border-color: var(--lime);
+  box-shadow: 0 0 0 2px rgba(184, 249, 58, .12);
+}
+.planet-search-results {
+  position: absolute;
+  top: calc(100% + 3px);
+  right: 0;
+  left: 0;
+  max-height: 250px;
+  overflow: auto;
+  border: 1px solid rgba(137, 183, 191, .25);
+  border-radius: 5px;
+  background: #071a27;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .4);
+}
+.planet-search-results[hidden] { display: none; }
+.planet-search-result {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 0;
+  border-bottom: 1px solid rgba(137, 183, 191, .1);
+  background: transparent;
+  color: #d4e5e6;
+  text-align: left;
+  cursor: pointer;
+}
+.planet-search-result:hover,
+.planet-search-result:focus-visible { background: rgba(184, 249, 58, .08); outline: none; }
+.planet-search-result .planet-orb { flex: 0 0 13px; }
+.planet-search-result-copy { display: grid; gap: 3px; min-width: 0; }
+.planet-search-result-copy strong { overflow: hidden; font: 10px var(--font); text-overflow: ellipsis; white-space: nowrap; }
+.planet-search-result-copy small { color: #7895a3; font: 8px var(--mono); }
+.planet-search-empty { padding: 11px 10px; color: #7895a3; font: 9px var(--mono); }
 .similar-planet-control label {
   color: #7895a3;
   font: 8px var(--mono);
@@ -1342,6 +1416,21 @@ body {
     visibility: visible;
     transform: translateY(0);
   }
+  .explorer-panel.centered-detail {
+    top: 50%;
+    right: 50%;
+    bottom: auto;
+    left: 50%;
+    width: min(620px, calc(100% - 24px));
+    max-height: min(86dvh, 820px);
+    border-bottom: 1px solid rgba(165, 204, 220, .18);
+    border-radius: 14px;
+    transform: translate(-50%, -44%) scale(.98);
+    transition: transform .3s cubic-bezier(.2,.75,.25,1), visibility .3s;
+  }
+  .explorer-panel.centered-detail.open {
+    transform: translate(-50%, -50%) scale(1);
+  }
   .explorer-panel .panel-topline {
     position: sticky;
     z-index: 2;
@@ -1606,6 +1695,7 @@ body {
   display: block;
   width: 100%;
   height: 100%;
+  touch-action: pan-y;
 }
 .map3d-label {
   position: absolute;
@@ -1614,10 +1704,104 @@ body {
   font: 8px/1.2 "DM Mono", monospace;
   letter-spacing: 0.04em;
   white-space: nowrap;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
   transform: translate(8px, -50%);
   text-shadow: 0 1px 5px #04111d, 0 0 9px #04111d;
 }
+.map3d-label:hover,
+.map3d-label:focus-visible {
+  color: #fff1ad;
+  outline: none;
+  text-shadow: 0 0 8px rgba(255, 190, 95, 0.9), 0 1px 5px #04111d;
+}
+.map3d-hud {
+  position: absolute;
+  z-index: 5;
+  left: 18px;
+  bottom: 16px;
+  display: grid;
+  gap: 4px;
+  max-width: min(280px, 38vw);
+  padding: 9px 12px;
+  border-left: 3px solid #ff9b55;
+  border-radius: 0 5px 5px 0;
+  background: rgba(5, 20, 31, 0.78);
+  color: #9bb2ba;
+  font: 8px/1.35 "DM Mono", monospace;
+  letter-spacing: 0.025em;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+.map3d-hud strong {
+  margin-bottom: 2px;
+  color: #ffbd78;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+}
+.map3d-hud span { white-space: nowrap; }
+.filter-summary-panel {
+  position: absolute;
+  z-index: 7;
+  top: 82px;
+  right: 16px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(330px, 42vw);
+  max-height: min(52%, 390px);
+  overflow: hidden;
+  border: 1px solid rgba(255, 166, 94, 0.32);
+  border-left: 3px solid #ff9b55;
+  border-radius: 6px;
+  background: rgba(5, 20, 31, 0.94);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(10px);
+}
+.filter-summary-panel[hidden] { display: none; }
+.filter-summary-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border-bottom: 1px solid rgba(157, 193, 202, 0.16);
+}
+.filter-summary-heading > div { display: grid; gap: 3px; min-width: 0; }
+.filter-summary-heading strong { color: #ffbd78; font: 8px "DM Mono", monospace; letter-spacing: 0.1em; }
+.filter-summary-heading small { color: #91a8b2; font: 8px "DM Mono", monospace; }
+.filter-summary-heading button {
+  width: 25px;
+  height: 25px;
+  border: 1px solid rgba(157, 193, 202, 0.22);
+  border-radius: 50%;
+  background: transparent;
+  color: #d4e5e6;
+  font-size: 18px;
+  cursor: pointer;
+}
+.filter-summary-list { overflow: auto; overscroll-behavior: contain; }
+.filter-summary-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px;
+  border: 0;
+  border-bottom: 1px solid rgba(157, 193, 202, 0.08);
+  background: transparent;
+  color: #d4e5e6;
+  text-align: left;
+  cursor: pointer;
+}
+.filter-summary-item:hover,
+.filter-summary-item:focus-visible { background: rgba(184, 249, 58, 0.08); outline: none; }
+.filter-summary-item .planet-orb,
+.filter-summary-object-icon { flex: 0 0 14px; width: 14px; height: 14px; }
+.filter-summary-object-icon { display: grid; place-items: center; color: #b8f93a; font-size: 12px; }
+.filter-summary-copy { display: grid; gap: 3px; min-width: 0; }
+.filter-summary-copy strong { overflow: hidden; font: 9px "Space Grotesk", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.filter-summary-copy small { color: #8198a3; font: 7px "DM Mono", monospace; }
+.filter-summary-empty { padding: 12px; color: #91a8b2; font: 8px/1.5 "DM Mono", monospace; }
 .map-heading,
 .map-grain,
 .map-panel > .starfield,
@@ -1634,6 +1818,9 @@ body {
   display: none;
 }
 .map-panel.system3d-view .map3d-star-label {
+  display: none !important;
+}
+.map-panel.system3d-view .map3d-object-label {
   display: none !important;
 }
 .map3d-system-controls {
@@ -1678,6 +1865,57 @@ body {
   color: #8fa9b2;
   font: 8px "DM Mono", monospace;
   letter-spacing: 0.08em;
+}
+
+@media (max-width: 760px) {
+  .map-panel,
+  .map-panel.map3d-ready {
+    height: clamp(340px, 54svh, 470px);
+    min-height: 340px;
+    max-height: 470px;
+    touch-action: pan-y;
+  }
+  .map-controls {
+    right: 10px;
+    bottom: 10px;
+    gap: 5px;
+    padding: 0 6px;
+  }
+  .map3d-hud {
+    left: 9px;
+    bottom: 9px;
+    gap: 3px;
+    max-width: 55vw;
+    padding: 7px 9px;
+    font-size: 7px;
+  }
+  .filter-summary-panel {
+    top: 76px;
+    right: 9px;
+    width: min(310px, calc(100% - 18px));
+    max-height: 43%;
+  }
+  .map-controls .map-orbit-toggle {
+    display: grid;
+  }
+  .map3d-system-controls {
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    gap: 8px;
+  }
+  .map3d-system-controls button {
+    padding: 8px;
+    font-size: 8px;
+  }
+  .map3d-system-heading strong {
+    font-size: 15px;
+  }
+  .map3d-system-heading small {
+    max-width: 48vw;
+    font-size: 7px;
+    line-height: 1.5;
+  }
 }
 .map3d-body-label {
   color: #e5f4dc;

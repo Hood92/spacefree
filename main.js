@@ -872,11 +872,11 @@ const missionsByPlanet = {
 
 // Distanze e classificazioni dei buchi neri sono reali; le coordinate della mappa restano schematiche.
 const mapObjects = [
-  { id: "bh-gaia1", kind: "blackhole", name: "Gaia BH1", distance: "1.560 A.L.", detail: "Buco nero stellare in Ofiuco, il più vicino noto con compagna stellare in orbita ampia.", source: "https://www.esa.int/Science_Exploration/Space_Science/Gaia/Gaia_discovers_a_new_family_of_black_holes" },
-  { id: "bh-gaia2", kind: "blackhole", name: "Gaia BH2", distance: "3.800 A.L.", detail: "Buco nero stellare nella costellazione del Centauro, individuato grazie al moto della sua stella compagna.", source: "https://www.esa.int/Science_Exploration/Space_Science/Gaia/Gaia_discovers_a_new_family_of_black_holes" },
-  { id: "bh-cygx1", kind: "blackhole", name: "Cygnus X-1", distance: "~7.200 A.L.", detail: "Una delle prime sorgenti identificate come buco nero stellare; è un sistema binario a raggi X.", source: "https://science.nasa.gov/universe/black-holes/" },
-  { id: "bh-sgra", kind: "blackhole", name: "Sagittarius A*", distance: "~26.000 A.L.", detail: "Buco nero supermassiccio al centro della Via Lattea, con massa di circa quattro milioni di Soli.", source: "https://science.nasa.gov/universe/black-holes/" },
-  { id: "bh-gaia3", kind: "blackhole", name: "Gaia BH3", distance: "1.926 A.L.", detail: "Buco nero stellare di circa 33 masse solari nella costellazione dell'Aquila, tra i più massicci noti nella Via Lattea.", source: "https://www.esa.int/ESA_Multimedia/Images/2024/04/Gaia_black_holes" },
+  { id: "bh-gaia1", kind: "blackhole", name: "Gaia BH1", distance: "1.560 A.L.", detail: "Buco nero stellare in Ofiuco, il più vicino noto con compagna stellare in orbita ampia.", source: "https://www.esa.int/Science_Exploration/Space_Science/Gaia/Gaia_discovers_a_new_family_of_black_holes", discoverer: "Kareem El-Badry e il team Gaia, con dati astrometrici delle stelle compagne" },
+  { id: "bh-gaia2", kind: "blackhole", name: "Gaia BH2", distance: "3.800 A.L.", detail: "Buco nero stellare nella costellazione del Centauro, individuato grazie al moto della sua stella compagna.", source: "https://www.esa.int/Science_Exploration/Space_Science/Gaia/Gaia_discovers_a_new_family_of_black_holes", discoverer: "Kareem El-Badry, Yvette Cendes e il team Gaia" },
+  { id: "bh-cygx1", kind: "blackhole", name: "Cygnus X-1", distance: "~7.200 A.L.", detail: "Una delle prime sorgenti identificate come buco nero stellare; è un sistema binario a raggi X.", source: "https://www.nature.com/articles/235037a0", discoverer: "Louise Webster e Paul Murdin; indipendentemente, Charles Thomas Bolton" },
+  { id: "bh-sgra", kind: "blackhole", name: "Sagittarius A*", distance: "~26.000 A.L.", detail: "Buco nero supermassiccio al centro della Via Lattea, con massa di circa quattro milioni di Soli.", source: "https://arxiv.org/abs/astro-ph/0305074", discoverer: "Bruce Balick e Robert L. Brown (sorgente radio, 1974); Robert Brown introdusse il nome Sgr A*" },
+  { id: "bh-gaia3", kind: "blackhole", name: "Gaia BH3", distance: "1.926 A.L.", detail: "Buco nero stellare di circa 33 masse solari nella costellazione dell'Aquila, tra i più massicci noti nella Via Lattea.", source: "https://www.esa.int/ESA_Multimedia/Images/2024/04/Gaia_black_holes", discoverer: "Pasquale Panuzzo e la collaborazione Gaia" },
 ];
 
 const probes = [
@@ -902,19 +902,21 @@ const els = {
   detail: document.getElementById("planetDetail"),
   topSystem: document.getElementById("topSystem"),
 };
-let activeSystem = "sol";
+let activeSystem = null;
 let activePlanet = null;
 let activeMapFilter = null;
 const detailsPanel = document.querySelector(".explorer-panel");
 const detailsBackdrop = document.getElementById("detailsBackdrop");
 let detailsPanelOpen = false;
 let savedBodyOverflow = "";
+let filterDetailTimer = 0;
 if (window.matchMedia("(max-width: 768px)").matches) {
   detailsPanel.setAttribute("aria-hidden", "true");
 }
-function openDetailsPanel() {
+function openDetailsPanel({ centered = false } = {}) {
   if (!window.matchMedia("(max-width: 768px)").matches || detailsPanelOpen) return;
   detailsPanelOpen = true;
+  detailsPanel.classList.toggle("centered-detail", centered);
   savedBodyOverflow = document.body.style.overflow;
   document.body.style.overflow = "hidden";
   detailsBackdrop.hidden = false;
@@ -929,6 +931,7 @@ function closeDetailsPanel() {
   detailsPanelOpen = false;
   document.body.style.overflow = savedBodyOverflow;
   detailsPanel.classList.remove("open");
+  detailsPanel.classList.remove("centered-detail");
   detailsPanel.setAttribute("aria-hidden", "true");
   detailsPanel.removeAttribute("aria-modal");
   detailsBackdrop.hidden = true;
@@ -943,7 +946,7 @@ function notifyMapCatalogUpdate() {
 function openBlackHole(id) {
   const object = mapObjects.find((item) => item.id === id);
   if (!object) return;
-  showMissionCard({ title: object.name, eyebrow: `BUCO NERO · ${object.distance}`, history: object.detail, construction: "Oggetto astrofisico osservato indirettamente attraverso gli effetti gravitazionali, la radiazione della materia circostante o il moto di stelle compagne.", engineer: "Ricerca collaborativa: missione Gaia dell'Agenzia Spaziale Europea e osservatori astronomici terrestri.", source: object.source });
+  showMissionCard({ ...object, title: object.name, eyebrow: `BUCO NERO · ${object.distance}`, history: object.detail, construction: "Oggetto astrofisico studiato attraverso il moto delle stelle compagne e la radiazione della materia circostante.", engineer: object.discoverer, source: object.source });
 }
 
 function openProbe(id) {
@@ -953,7 +956,12 @@ function openProbe(id) {
 
 function showMissionCard(item) {
   const content = document.getElementById("missionContent");
-  content.innerHTML = `${item.image ? `<img class="mission-image" src="${item.image}" alt="${item.title}" onerror="this.hidden=true">` : `<div class="mission-image mission-placeholder" aria-hidden="true">✦</div>`}<div class="mission-body"><span class="mission-eyebrow">${item.eyebrow}</span><h2 id="missionTitle">${item.title}</h2>${item.launched ? `<p class="mission-date">Lancio · ${item.launched}</p>` : ""}<h3>Diario della missione</h3><p>${item.history}</p><h3>Progettazione e costruzione</h3><p>${item.construction}</p><h3>Figure di riferimento</h3><p>${item.engineer}</p><a class="mission-source" href="${item.source}" target="_blank" rel="noopener noreferrer">Fonte NASA / ESA ↗</a><p class="mission-credit">Immagini e dati: archivi NASA / JPL / ESA</p></div>`;
+  const isBlackHole = item.eyebrow?.includes("BUCO NERO");
+  const illustration = isBlackHole
+    ? '<svg class="mission-illustration" viewBox="0 0 640 260" role="img" aria-label="Illustrazione schematica di un buco nero"><defs><radialGradient id="missionBhGlow"><stop offset="0" stop-color="#050711"/><stop offset=".3" stop-color="#080b17"/><stop offset=".42" stop-color="#ffca72"/><stop offset=".58" stop-color="#ff7356"/><stop offset=".76" stop-color="#8a69ff" stop-opacity=".7"/><stop offset="1" stop-color="#071725" stop-opacity="0"/></radialGradient></defs><ellipse cx="320" cy="140" rx="230" ry="50" fill="none" stroke="#79dcf1" stroke-opacity=".28" stroke-width="2" transform="rotate(-9 320 140)"/><ellipse cx="320" cy="132" rx="188" ry="64" fill="url(#missionBhGlow)"/><circle cx="320" cy="130" r="46" fill="#02040b"/><circle cx="320" cy="130" r="54" fill="none" stroke="#ffd58a" stroke-opacity=".8" stroke-width="3"/><g fill="#dff7ff"><circle cx="110" cy="55" r="2"/><circle cx="490" cy="65" r="2"/><circle cx="525" cy="188" r="1.5"/><circle cx="150" cy="205" r="1.5"/></g></svg>'
+    : '<svg class="mission-illustration" viewBox="0 0 640 260" role="img" aria-label="Illustrazione tecnica schematica di una sonda spaziale"><g fill="#d9e9df" stroke="#8ce2ea" stroke-width="2"><path d="M293 113 333 96 347 119 322 145 295 138Z"/><path d="m300 110-80-37-17 13 77 54ZM337 111l82-39 17 12-81 57Z"/><path d="m320 142-4 42 13 9 10-47Z"/><path d="m299 119-28 16 6 10 31-13Z"/></g><circle cx="323" cy="122" r="12" fill="#ffbd78"/><path d="M115 206h410M160 224h320" stroke="#668c9c" stroke-opacity=".35" stroke-width="2"/><g fill="#eaf5ed"><circle cx="112" cy="52" r="2"/><circle cx="503" cy="62" r="2"/><circle cx="531" cy="165" r="1.5"/></g></svg>';
+  const visual = `<div class="mission-visual">${illustration}${item.image ? `<img class="mission-image" src="${item.image}" alt="${item.title}" onload="this.previousElementSibling.hidden=true" onerror="this.hidden=true">` : ""}</div>`;
+  content.innerHTML = `${visual}<div class="mission-body"><span class="mission-eyebrow">${item.eyebrow}</span><h2 id="missionTitle">${item.title}</h2>${item.launched ? `<p class="mission-date">Lancio · ${item.launched}</p>` : ""}<h3>Diario della missione</h3><p>${item.history}</p><h3>Progettazione e costruzione</h3><p>${item.construction}</p><h3>${isBlackHole ? "Scoperta scientifica" : "Figure di riferimento"}</h3><p>${item.discoverer || item.engineer || "Team scientifico della missione."}</p><a class="mission-source" href="${item.source}" target="_blank" rel="noopener noreferrer">Fonte NASA / ESA ↗</a><p class="mission-credit">Immagini da NASA / JPL / ESA; illustrazione schematica quando indicato.</p></div>`;
   const dialog = document.getElementById("missionDialog");
   if (!dialog.open) dialog.showModal();
 }
@@ -969,13 +977,102 @@ function selectPlanetByName(name) {
   const planet = systems[activeSystem]?.planets.find((item) => item.name === name);
   if (button && planet) showPlanet(planet, button);
 }
-function navigateToSystem(id, planetName = null) {
+function navigateToSystem(id, planetName = null, options = {}) {
   if (!systems[id]) return;
-  openDetailsPanel();
-  window.dispatchEvent(new CustomEvent("map3d-open-system", { detail: { id } }));
+  window.clearTimeout(filterDetailTimer);
+  if (detailsPanelOpen) closeDetailsPanel();
+  const source = options.source || (planetName ? "search" : "map");
+  window.pendingMapTravel = { id, planetName, source, detailDelayMs: options.detailDelayMs || 0 };
+  window.dispatchEvent(new CustomEvent("map3d-travel-to", { detail: window.pendingMapTravel }));
   renderSystem(id);
   selectPlanetByName(planetName);
 }
+window.addEventListener("map3d-system-entered", (event) => {
+  const isMobile = window.matchMedia("(max-width: 768px)").matches;
+  if (isMobile && event.detail?.source === "search") openDetailsPanel();
+  if (event.detail?.source === "filter") {
+    window.clearTimeout(filterDetailTimer);
+    const { id, planetName } = event.detail;
+    filterDetailTimer = window.setTimeout(() => {
+      if (activeSystem === id && activePlanet?.name === planetName) {
+        openDetailsPanel({ centered: isMobile });
+      }
+    }, Number.isFinite(event.detail.detailDelayMs) ? event.detail.detailDelayMs : 2000);
+  }
+});
+
+const planetSearch = document.getElementById("planetSearch");
+const planetSearchResults = document.getElementById("planetSearchResults");
+let planetSearchMatches = [];
+function closePlanetSearchResults() {
+  planetSearchResults.hidden = true;
+  planetSearch.setAttribute("aria-expanded", "false");
+  planetSearch.removeAttribute("aria-activedescendant");
+}
+function updatePlanetSearchResults() {
+  const query = normalizeItalian(planetSearch.value.trim());
+  planetSearchMatches = [];
+  planetSearchResults.replaceChildren();
+  if (!query) {
+    closePlanetSearchResults();
+    return;
+  }
+  for (const [systemId, system] of Object.entries(systems)) {
+    for (const planet of system.planets || []) {
+      if (normalizeItalian(planet.name).includes(query)) {
+        planetSearchMatches.push({ systemId, system, planet });
+      }
+    }
+  }
+  planetSearchMatches.sort((a, b) => {
+    const aPrefix = normalizeItalian(a.planet.name).startsWith(query) ? 0 : 1;
+    const bPrefix = normalizeItalian(b.planet.name).startsWith(query) ? 0 : 1;
+    return aPrefix - bPrefix || a.planet.name.localeCompare(b.planet.name, "it");
+  });
+  planetSearchMatches = planetSearchMatches.slice(0, 10);
+  for (const [index, match] of planetSearchMatches.entries()) {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.id = `planet-search-option-${index}`;
+    option.className = "planet-search-result";
+    option.setAttribute("role", "option");
+    option.setAttribute("aria-selected", "false");
+    option.innerHTML = `<span class="planet-orb" style="--planet-color:${match.planet.color || "#9bb8c6"}"></span><span class="planet-search-result-copy"><strong>${match.planet.name}</strong><small>${match.system.shortName}</small></span>`;
+    option.addEventListener("click", () => {
+      planetSearch.value = match.planet.name;
+      closePlanetSearchResults();
+      navigateToSystem(match.systemId, match.planet.name);
+    });
+    planetSearchResults.appendChild(option);
+  }
+  if (!planetSearchMatches.length) {
+    const empty = document.createElement("div");
+    empty.className = "planet-search-empty";
+    empty.textContent = "Nessun pianeta trovato nel catalogo";
+    planetSearchResults.appendChild(empty);
+  }
+  planetSearchResults.hidden = false;
+  planetSearch.setAttribute("aria-expanded", "true");
+}
+planetSearch.addEventListener("input", updatePlanetSearchResults);
+planetSearch.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closePlanetSearchResults();
+    return;
+  }
+  if (event.key === "Enter" && planetSearchMatches.length) {
+    event.preventDefault();
+    planetSearchResults.querySelector(".planet-search-result")?.click();
+    return;
+  }
+  if (event.key === "ArrowDown" && !planetSearchResults.hidden) {
+    event.preventDefault();
+    planetSearchResults.querySelector(".planet-search-result")?.focus();
+  }
+});
+document.addEventListener("pointerdown", (event) => {
+  if (!event.target.closest(".planet-search-control")) closePlanetSearchResults();
+});
 
 function applyMapFilterClasses() {
   document.querySelectorAll(".planet-card").forEach((card) => {
@@ -998,6 +1095,7 @@ function applyMapFilterClasses() {
 }
 
 function clearMapFilter() {
+  closeFilterSummary();
   activeMapFilter = null;
   document.querySelectorAll(".planet-card").forEach((card) =>
     card.classList.remove("filter-planet-match", "filter-planet-out"),
@@ -1027,6 +1125,82 @@ function planetMatchesMapFilter(planet, kind) {
     );
   return true;
 }
+
+const filterSummaryPanel = document.getElementById("filterSummaryPanel");
+const filterSummaryList = document.getElementById("filterSummaryList");
+const filterSummaryNames = {
+  rocky: "PIANETI ROCCIOSI", gas: "GIGANTI GASSOSI", hydrogen: "MONDI CON IDROGENO",
+  ice: "MONDI GHIACCIATI", methane: "MONDI CON METANO", water: "MONDI CON ACQUA / AMMONIACA",
+  metal: "MONDI CON METALLI / SILICATI", habitable: "MONDI IN ZONA TEMPERATA",
+  blackhole: "BUCHI NERI", probe: "SONDE SPAZIALI", "historic-probe": "SONDE STORICHE",
+};
+function closeFilterSummary() { filterSummaryPanel.hidden = true; }
+function renderFilterSummary(kind) {
+  filterSummaryList.replaceChildren();
+  const entries = [];
+  if (kind === "blackhole") {
+    mapObjects.forEach((item) => entries.push({ type: "special", id: item.id, name: item.name, detail: `BUCO NERO · ${item.distance}`, color: "#b78cff" }));
+  } else if (kind === "probe" || kind === "historic-probe") {
+    probes.filter((item) => kind === "probe" || item.status.includes("Storica"))
+      .forEach((item) => entries.push({ type: "special", id: item.id, name: item.name, detail: `SONDA · ${item.status}`, color: "#b8f93a" }));
+  } else {
+    for (const [systemId, system] of Object.entries(systems)) {
+      for (const planet of system.planets || []) {
+        if (planetMatchesMapFilter(planet, kind)) entries.push({ type: "planet", systemId, planet, name: planet.name, detail: system.shortName });
+      }
+    }
+  }
+  document.getElementById("filterSummaryTitle").textContent = filterSummaryNames[kind] || "RISULTATI FILTRO";
+  document.getElementById("filterSummaryCount").textContent = `${entries.length} DESTINAZIONI · seleziona per impostare la rotta`;
+  if (!entries.length) {
+    const empty = document.createElement("div");
+    empty.className = "filter-summary-empty";
+    empty.textContent = "Nessun elemento del catalogo corrisponde a questo filtro.";
+    filterSummaryList.appendChild(empty);
+  }
+  for (const entry of entries) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "filter-summary-item";
+    button.dataset.resultType = entry.type;
+    if (entry.type === "planet") {
+      button.dataset.systemId = entry.systemId;
+      button.dataset.planetName = entry.planet.name;
+      const orb = document.createElement("span");
+      orb.className = "planet-orb";
+      orb.style.setProperty("--planet-color", entry.planet.color || "#9bb8c6");
+      button.appendChild(orb);
+    } else {
+      button.dataset.specialId = entry.id;
+      const icon = document.createElement("span");
+      icon.className = "filter-summary-object-icon";
+      icon.style.color = entry.color;
+      icon.textContent = entry.id.startsWith("bh-") ? "◉" : "✦";
+      button.appendChild(icon);
+    }
+    const copy = document.createElement("span");
+    copy.className = "filter-summary-copy";
+    const name = document.createElement("strong");
+    name.textContent = entry.name;
+    const detail = document.createElement("small");
+    detail.textContent = entry.detail;
+    copy.append(name, detail);
+    button.appendChild(copy);
+    filterSummaryList.appendChild(button);
+  }
+  filterSummaryPanel.hidden = false;
+}
+filterSummaryList.addEventListener("click", (event) => {
+  const button = event.target.closest(".filter-summary-item");
+  if (!button) return;
+  closeFilterSummary();
+  if (button.dataset.resultType === "planet") {
+    navigateToSystem(button.dataset.systemId, button.dataset.planetName, { source: "filter", detailDelayMs: 0 });
+  } else if (button.dataset.specialId) {
+    window.travelToSpecialObject?.(button.dataset.specialId);
+  }
+});
+document.getElementById("filterSummaryClose").addEventListener("click", closeFilterSummary);
 
 function setMapPlanetFilter(kind) {
   if (activeMapFilter?.kind === kind) {
@@ -1074,6 +1248,7 @@ function setMapPlanetFilter(kind) {
   document.getElementById("mapFilterText").textContent =
     `${matches.size} oggetti evidenziati · ${planetCount} corpi compatibili · ${labels[kind]}`;
   document.getElementById("mapFilterNotice").hidden = false;
+  renderFilterSummary(kind);
 }
 document.querySelectorAll("[data-planet-filter]").forEach((button) => {
   button.addEventListener("click", () =>
@@ -1350,8 +1525,9 @@ function renderSystem(id) {
   els.countLabel.textContent = `${data.count.padStart(2, "0")} ${data.planets.length === 1 ? "CORPO" : "CORPI"}`;
   els.topSystem.textContent = data.shortName;
   els.list.innerHTML = "";
+  els.detail.innerHTML = '<div class="detail-empty"><span>✦</span> Seleziona un pianeta<br>per consultare la scheda</div>';
   if (data.planets.length) {
-    data.planets.forEach((planet, index) => {
+    data.planets.forEach((planet) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "planet-card";
@@ -1363,7 +1539,6 @@ function renderSystem(id) {
         openDetailsPanel();
       });
       els.list.appendChild(button);
-      if (index === 0) showPlanet(planet, button);
     });
   } else {
     els.list.innerHTML =
@@ -1375,8 +1550,24 @@ function renderSystem(id) {
   applyMapFilterClasses();
 }
 
+function clearExplorerSelection() {
+  activeSystem = null;
+  activePlanet = null;
+  updateSimilarPlanetOptions(null);
+  els.name.innerHTML = "Nessun sistema<br>selezionato<span>.</span>";
+  els.description.textContent = "Cerca un pianeta per impostare la rotta, oppure esplora liberamente la mappa stellare.";
+  els.number.textContent = "-- / --";
+  els.distance.innerHTML = "— <em>AL</em>";
+  els.star.innerHTML = "— <em>nessuna selezione</em>";
+  els.count.innerHTML = "— <em>catalogo</em>";
+  els.countLabel.textContent = "NESSUN SISTEMA";
+  els.topSystem.textContent = "NESSUNA DESTINAZIONE";
+  els.list.innerHTML = '<div class="no-planets">Cerca un pianeta o seleziona un sistema sulla mappa.</div>';
+  els.detail.innerHTML = '<div class="detail-empty"><span>✦</span> Nessun pianeta selezionato<br>Usa la ricerca per tracciare una rotta</div>';
+  updateChatContext();
+}
 
-let zoom = 3;
+let zoom = 0.2;
 const zoomLabel = document.querySelector(".map-controls span");
 const map = document.querySelector(".map-panel");
 let panX = 0, panY = 0, pointerStart = null, draggedMap = false;
@@ -1384,8 +1575,18 @@ const touchPoints = new Map();
 let pinchStart = null;
 zoomLabel.textContent = `${zoom.toFixed(2)}x`;
 
+function clampMapPan() {
+  const bounds = map.getBoundingClientRect();
+  const zoomBound = Math.min(2, Math.max(0.18, zoom)) * 1.5;
+  const maxPanX = bounds.width * zoomBound;
+  const maxPanY = bounds.height * zoomBound;
+  panX = Math.max(-maxPanX, Math.min(maxPanX, panX));
+  panY = Math.max(-maxPanY, Math.min(maxPanY, panY));
+}
+
 function setZoom(next) {
   zoom = Math.max(0.12, Math.min(24, +next.toFixed(2)));
+  clampMapPan();
   zoomLabel.textContent = `${zoom.toFixed(2)}×`;
 }
 map.addEventListener("wheel", (event) => {
@@ -1400,9 +1601,11 @@ map.addEventListener("wheel", (event) => {
   const scale = zoom / previousZoom;
   panX = focusX - originX - (focusX - originX - panX) * scale;
   panY = focusY - originY - (focusY - originY - panY) * scale;
+  clampMapPan();
   zoomLabel.textContent = `${zoom.toFixed(2)}x`;
 }, { passive: false });
 map.addEventListener("pointerdown", (event) => {
+  if (event.target.closest("#map-container canvas")) return;
   if (detailsPanelOpen && !map.classList.contains("system3d-view")) return;
   if (event.button !== 0 || event.target.closest(".map-controls, .map-class-filters, .map-filter-notice, .map3d-system-controls")) return;
   if (event.pointerType === "touch") {
@@ -1444,6 +1647,7 @@ window.addEventListener("pointermove", (event) => {
       const worldY = originY + (pinchStart.centerY - originY - pinchStart.panY) / pinchStart.zoom;
       panX = centerX - originX - (worldX - originX) * zoom;
       panY = centerY - originY - (worldY - originY) * zoom;
+      clampMapPan();
           zoomLabel.textContent = `${zoom.toFixed(2)}Ã—`;
       event.preventDefault();
       return;
@@ -1459,6 +1663,7 @@ window.addEventListener("pointermove", (event) => {
   }
   panX = pointerStart.panX + dx;
   panY = pointerStart.panY + dy;
+  clampMapPan();
 });
 function finishMapDrag(event) {
   if (touchPoints.has(event.pointerId)) {
@@ -1495,9 +1700,11 @@ document
 document.getElementById("resetMap").addEventListener("click", () => {
   panX = 0;
   panY = 0;
-  setZoom(3);
-  window.dispatchEvent(new Event("map3d-show-galaxy"));
-  renderSystem("sol");
+  setZoom(0.2);
+  planetSearch.value = "";
+  closePlanetSearchResults();
+  window.dispatchEvent(new CustomEvent("map3d-show-galaxy", { detail: { reset: true } }));
+  clearExplorerSelection();
 });
 window.addEventListener("resize", () => {
   if (window.matchMedia("(max-width: 768px)").matches) {
@@ -1551,8 +1758,12 @@ fetch("/api/status")
   });
 function updateChatContext() {
   const system = systems[activeSystem];
+  if (!system) {
+    document.getElementById("chatContext").textContent = "ARCHIVIO DISPONIBILE · nessun sistema selezionato";
+    return;
+  }
   document.getElementById("chatContext").textContent =
-    `ARCHIVIO DISPONIBILE · ${system.shortName}`;
+    system ? `ARCHIVIO DISPONIBILE · ${system.shortName}` : "ARCHIVIO DISPONIBILE · nessun sistema selezionato";
 }
 function toggleChat(open) {
   chat.classList.toggle("open", open);
@@ -1731,13 +1942,13 @@ function contextForQuestion(question) {
   const planet = asksPlanetFacts ? namedPlanet : null;
   const profile = planet ? planetProfiles[planet.name] || null : null;
   return {
-    selectedSystem: {
+    selectedSystem: system ? {
       name: system.shortName,
       distanceFromEarthLightYears: system.distance,
       stellarClass: system.star,
       starType: system.starType,
       description: system.description,
-    },
+    } : null,
     selectedPlanet: planet
       ? {
           name: planet.name,
@@ -1754,7 +1965,7 @@ function contextForQuestion(question) {
           habitability: profile?.habitability,
         }
       : null,
-    systemPlanets: system.planets.map((item) => ({
+    systemPlanets: (system?.planets || []).map((item) => ({
       name: item.name,
       type: item.type,
       massOrDiameter: item.diameter,
@@ -1825,6 +2036,7 @@ async function loadExpandedExoplanetCatalog() {
     if (count) count.textContent = `${Object.keys(systems).length} SISTEMI · NASA EXOPLANET ARCHIVE`;
     const status = document.getElementById("catalogStatus");
     if (status) status.textContent = `${added} sistemi extrasolari caricati · aggiornamento ${new Date(payload.updatedAt).toLocaleDateString("it-IT")}`;
+    if (planetSearch.value.trim()) updatePlanetSearchResults();
   } catch (error) {
     console.warn("Catalogo esteso degli esopianeti non disponibile:", error.message);
     const status = document.getElementById("catalogStatus");
@@ -1833,5 +2045,5 @@ async function loadExpandedExoplanetCatalog() {
 }
 
 notifyMapCatalogUpdate();
-renderSystem("sol");
+clearExplorerSelection();
 loadExpandedExoplanetCatalog();

@@ -1740,6 +1740,9 @@ body {
   letter-spacing: 0.1em;
 }
 .map3d-hud span { white-space: nowrap; }
+@media (max-width: 1024px) {
+  .map3d-hud { display: none; }
+}
 .filter-summary-panel {
   position: absolute;
   z-index: 7;

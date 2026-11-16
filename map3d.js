@@ -339,13 +339,47 @@ document.addEventListener("DOMContentLoaded", async () => {
   let suppressMapClick = false;
   renderer.domElement.style.touchAction = "pan-y";
   const mapOrbitToggle = document.getElementById("mapOrbitToggle");
+  const touchPointers = new Map();
+  let touchGesture = null;
   mapOrbitToggle?.addEventListener("click", () => {
     const enabled = mapOrbitToggle.getAttribute("aria-pressed") !== "true";
     mapOrbitToggle.setAttribute("aria-pressed", String(enabled));
-    mapOrbitToggle.setAttribute("aria-label", enabled ? "Disattiva rotazione touch e riattiva lo scorrimento" : "Attiva rotazione touch della mappa");
+    mapOrbitToggle.setAttribute("aria-label", enabled ? "Disattiva i controlli touch e riattiva lo scorrimento della pagina" : "Attiva pan con un dito e zoom con due dita");
+    mapOrbitToggle.title = enabled ? "Trascina per spostare la mappa, usa due dita per lo zoom; premi per scorrere la pagina" : "Attiva pan con un dito e pinch-to-zoom";
     renderer.domElement.style.touchAction = enabled ? "none" : "pan-y";
   });
   renderer.domElement.addEventListener("pointerdown", (event) => {
+    if (event.pointerType === "touch") {
+      if (mapOrbitToggle?.getAttribute("aria-pressed") !== "true") return;
+      event.preventDefault();
+      event.stopPropagation();
+      touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      renderer.domElement.setPointerCapture(event.pointerId);
+      mapRotationPointer = null;
+      mapPanPointer = null;
+      if (touchPointers.size >= 2) {
+        const [first, second] = [...touchPointers.values()];
+        const rect = renderer.domElement.getBoundingClientRect();
+        const centerX = (first.x + second.x) / 2 - rect.left;
+        const centerY = (first.y + second.y) / 2 - rect.top;
+        const originX = rect.width / 2;
+        const originY = rect.height / 2;
+        touchGesture = {
+          mode: "pinch",
+          distance: Math.max(1, Math.hypot(second.x - first.x, second.y - first.y)),
+          centerX,
+          centerY,
+          zoom: typeof zoom === "number" ? zoom : 0.2,
+          panX: typeof panX === "number" ? panX : 0,
+          panY: typeof panY === "number" ? panY : 0,
+          worldX: originX + (centerX - originX - (typeof panX === "number" ? panX : 0)) / Math.max(0.12, typeof zoom === "number" ? zoom : 0.2),
+          worldY: originY + (centerY - originY - (typeof panY === "number" ? panY : 0)) / Math.max(0.12, typeof zoom === "number" ? zoom : 0.2),
+        };
+      } else {
+        touchGesture = { mode: "pan", id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+      }
+      return;
+    }
     if (event.button === 2) {
       event.preventDefault();
       event.stopPropagation();
@@ -354,12 +388,43 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
     if (event.button !== 0) return;
-    if (event.pointerType === "touch" && mapOrbitToggle?.getAttribute("aria-pressed") !== "true") return;
     event.stopPropagation();
     mapRotationPointer = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
     renderer.domElement.setPointerCapture(event.pointerId);
   });
   renderer.domElement.addEventListener("pointermove", (event) => {
+    if (event.pointerType === "touch" && touchPointers.has(event.pointerId)) {
+      event.preventDefault();
+      event.stopPropagation();
+      touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      const rect = renderer.domElement.getBoundingClientRect();
+      if (touchGesture?.mode === "pinch" && touchPointers.size >= 2) {
+        const [first, second] = [...touchPointers.values()];
+        const distance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
+        const centerX = (first.x + second.x) / 2 - rect.left;
+        const centerY = (first.y + second.y) / 2 - rect.top;
+        const nextZoom = Math.max(0.12, Math.min(24, touchGesture.zoom * distance / touchGesture.distance));
+        const originX = rect.width / 2;
+        const originY = rect.height / 2;
+        zoom = nextZoom;
+        panX = centerX - originX - (touchGesture.worldX - originX) * zoom;
+        panY = centerY - originY - (touchGesture.worldY - originY) * zoom;
+        if (typeof clampMapPan === "function") clampMapPan();
+        zoomLabel.textContent = `${zoom.toFixed(2)}×`;
+      } else if (touchGesture?.mode === "pan" && touchGesture.id === event.pointerId) {
+        const dx = event.clientX - touchGesture.x;
+        const dy = event.clientY - touchGesture.y;
+        if (Math.hypot(dx, dy) > 3) touchGesture.moved = true;
+        if (touchGesture.moved) {
+          if (typeof panX === "number") panX += dx;
+          if (typeof panY === "number") panY += dy;
+          if (typeof clampMapPan === "function") clampMapPan();
+          touchGesture.x = event.clientX;
+          touchGesture.y = event.clientY;
+        }
+      }
+      return;
+    }
     if (mapPanPointer?.id === event.pointerId) {
       const dx = event.clientX - mapPanPointer.x;
       const dy = event.clientY - mapPanPointer.y;
@@ -383,6 +448,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
   const endMapRotation = (event) => {
+    if (event.pointerType === "touch" && touchPointers.has(event.pointerId)) {
+      const wasPinching = touchGesture?.mode === "pinch";
+      touchPointers.delete(event.pointerId);
+      if (touchPointers.size === 1) {
+        const [remainingId, point] = [...touchPointers.entries()][0];
+        touchGesture = { mode: "pan", id: remainingId, x: point.x, y: point.y, moved: wasPinching };
+      } else if (touchPointers.size === 0) {
+        suppressMapClick = Boolean(touchGesture?.moved || wasPinching);
+        touchGesture = null;
+      }
+      return;
+    }
     if (mapPanPointer?.id === event.pointerId) {
       mapPanPointer = null;
       return;

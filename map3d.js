@@ -341,6 +341,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   const mapOrbitToggle = document.getElementById("mapOrbitToggle");
   const touchPointers = new Map();
   let touchGesture = null;
+  const touchNavigationDefault = window.matchMedia("(max-width: 1024px)").matches;
+  if (touchNavigationDefault && mapOrbitToggle) {
+    mapOrbitToggle.setAttribute("aria-pressed", "true");
+    mapOrbitToggle.setAttribute("aria-label", "Disattiva i controlli touch e riattiva lo scorrimento della pagina");
+    mapOrbitToggle.title = "Trascina per spostare la mappa, usa due dita per lo zoom; premi per scorrere la pagina";
+    renderer.domElement.style.touchAction = "none";
+  }
   mapOrbitToggle?.addEventListener("click", () => {
     const enabled = mapOrbitToggle.getAttribute("aria-pressed") !== "true";
     mapOrbitToggle.setAttribute("aria-pressed", String(enabled));

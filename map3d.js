@@ -42,7 +42,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x04111d);
-  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 3000);
+  const camera = new THREE.PerspectiveCamera(55, 1, 0.01, 6000);
   camera.position.set(0, 0, 115);
 
   let renderer;
@@ -81,6 +81,33 @@ document.addEventListener("DOMContentLoaded", async () => {
   );
   galaxyGroup.add(starfield);
 
+  // Spirale galattica procedurale: diventa protagonista quando la camera si allontana.
+  const galaxyParticleCount = 24000;
+  const galaxyPositions = new Float32Array(galaxyParticleCount * 3);
+  const galaxyColors = new Float32Array(galaxyParticleCount * 3);
+  const armColors = [new THREE.Color(0x68bfe8), new THREE.Color(0xc39cff), new THREE.Color(0xffc778)];
+  for (let i = 0; i < galaxyParticleCount; i++) {
+    const arm = i % 3;
+    const radius = 22 + Math.pow(random(), 0.72) * 940;
+    const angle = arm * (Math.PI * 2 / 3) + radius * 0.012 + (random() - 0.5) * 0.34;
+    galaxyPositions[i * 3] = Math.cos(angle) * radius;
+    galaxyPositions[i * 3 + 1] = (random() - 0.5) * Math.max(3, 42 * (1 - radius / 1100));
+    galaxyPositions[i * 3 + 2] = Math.sin(angle) * radius * 0.68;
+    const color = armColors[arm].clone().lerp(new THREE.Color(0xffe7bd), random() * 0.42);
+    galaxyColors[i * 3] = color.r;
+    galaxyColors[i * 3 + 1] = color.g;
+    galaxyColors[i * 3 + 2] = color.b;
+  }
+  const macroGeometry = new THREE.BufferGeometry();
+  macroGeometry.setAttribute("position", new THREE.BufferAttribute(galaxyPositions, 3));
+  macroGeometry.setAttribute("color", new THREE.BufferAttribute(galaxyColors, 3));
+  const macroGalaxy = new THREE.Points(macroGeometry, new THREE.PointsMaterial({
+    size: 2.2, sizeAttenuation: true, vertexColors: true, transparent: true,
+    opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  macroGalaxy.rotation.x = -0.12;
+  galaxyGroup.add(macroGalaxy);
+
   // Texture radiale condivisa: evita i quadrati visibili con SpriteMaterial senza mappa.
   const glowCanvas = document.createElement("canvas");
   glowCanvas.width = glowCanvas.height = 64;
@@ -109,26 +136,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     container.querySelectorAll(".map3d-star-label").forEach((label) => label.remove());
     const entries = Object.entries(systems);
     entries.forEach(([id, data], index) => {
-      const t = (index + 0.5) / Math.max(1, entries.length);
-      const y = 1 - 2 * t;
-      const radius = Math.sqrt(Math.max(0, 1 - y * y));
+      // Coordinate 3D locali schematiche: distanza catalogata in anni luce e
+      // direzione deterministica, in attesa di coordinate astrometriche complete.
+      const distance = Number(String(data.distance || "0").replace(",", ".").match(/[0-9]+(?:\.[0-9]+)?/)?.[0] || 0);
       const angle = index * goldenAngle;
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
+      const y = Math.cos(index * 2.399963229728653) * 0.72;
+      const horizontal = Math.sqrt(1 - y * y);
+      const x = Math.cos(angle) * horizontal;
+      const z = Math.sin(angle) * horizontal;
       const color = id === "sol" || /G[0-9]/.test(data.star) ? 0xffd98a : /A[0-9]|F[0-9]/.test(data.star) ? 0x9bdcff : /K[0-9]/.test(data.star) ? 0xffad70 : 0xff817e;
       const mesh = new THREE.Mesh(
         new THREE.SphereGeometry(id === "sol" ? 1.35 : entries.length > 100 ? 0.58 : 0.82, 16, 12),
         new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95 })
       );
-      mesh.position.set(x * 49, y * 36, z * 42);
-      mesh.userData = { id, label: data.shortName };
+      const localDistance = id === "sol" ? 0 : Math.max(2.2, distance * 1.55);
+      mesh.position.set(x * localDistance, y * localDistance * 0.72, z * localDistance);
+      mesh.userData = { id, label: data.shortName, distanceLy: distance };
       mesh.userData.catalogOnly = id.startsWith("exo-");
       galaxyGroup.add(mesh);
       systemMeshes.push(mesh);
       systemDecorations.push(mesh);
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
       glow.position.copy(mesh.position);
-      glow.scale.set(11, 11, 1);
+      glow.scale.set(id === "sol" ? 8 : 3.5, id === "sol" ? 8 : 3.5, 1);
       glow.userData.systemId = id;
       galaxyGroup.add(glow);
       systemDecorations.push(glow);
@@ -392,6 +422,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   function render() {
     frame = requestAnimationFrame(render);
     syncCameraToMapControls();
+    const mapZoom = typeof zoom === "number" ? zoom : 3;
     starfield.rotation.y += 0.000025;
     const time = performance.now() / 1000;
     for (const body of systemBodies) {
@@ -412,8 +443,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     for (const mesh of systemMeshes) {
       const projected = mesh.position.clone().project(camera);
-      const visible = projected.z > -1 && projected.z < 1 && (!mesh.userData.catalogOnly || mesh.userData.hovered);
+      const labelFade = THREE.MathUtils.smoothstep(mapZoom, 3.2, 6.5);
+      const visible = projected.z > -1 && projected.z < 1 && Math.abs(projected.x) < 1.08 && Math.abs(projected.y) < 1.08 && labelFade > 0.02;
       mesh.userData.labelElement.style.display = visible ? "block" : "none";
+      mesh.userData.labelElement.style.opacity = String(labelFade);
       if (visible) {
         mesh.userData.labelElement.style.left = `${(projected.x * 0.5 + 0.5) * container.clientWidth}px`;
         mesh.userData.labelElement.style.top = `${(-projected.y * 0.5 + 0.5) * container.clientHeight}px`;
@@ -429,6 +462,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     }
     renderer.render(scene, camera);
+    const macroFade = activeSystemView ? 0 : 1 - THREE.MathUtils.smoothstep(typeof zoom === "number" ? zoom : 3, 0.35, 1.35);
+    macroGalaxy.material.opacity += (macroFade * 0.82 - macroGalaxy.material.opacity) * 0.035;
+    macroGalaxy.visible = macroGalaxy.material.opacity > 0.015;
+    starfield.material.opacity = 0.78 - macroGalaxy.material.opacity * 0.36;
   }
   render();
 
@@ -439,6 +476,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     clearSystemGroup();
     renderer.dispose();
     starGeometry.dispose();
+    macroGeometry.dispose();
+    macroGalaxy.material.dispose();
     starfield.material.dispose();
     glowTexture.dispose();
     container.querySelectorAll(".map3d-label").forEach((label) => label.remove());

@@ -29,7 +29,12 @@ async def query(request: QueryRequest):
     if results and 'documents' in results and results['documents']:
         context = " ".join(results['documents'][0])
     
-    prompt = f"Context: {context}\n\nQuestion: {request.query}"
+    selected_system = request.system_context or {}
+    system_context = (
+        f"\n\nDati strutturati del catalogo Orbite per la domanda: {selected_system}"
+        if selected_system else ""
+    )
+    prompt = f"Context: {context}{system_context}\n\nQuestion: {request.query}"
     
     # 3. Get response from Ollama
     answer = ollama_service.generate_response(prompt)

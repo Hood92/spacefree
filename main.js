@@ -1382,11 +1382,11 @@ const map = document.querySelector(".map-panel");
 let panX = 0, panY = 0, pointerStart = null, draggedMap = false;
 const touchPoints = new Map();
 let pinchStart = null;
-zoomLabel.textContent = `${zoom.toFixed(1)}x`;
+zoomLabel.textContent = `${zoom.toFixed(2)}x`;
 
 function setZoom(next) {
-  zoom = Math.max(0.8, Math.min(3.5, +next.toFixed(1)));
-  zoomLabel.textContent = `${zoom.toFixed(1)}×`;
+  zoom = Math.max(0.12, Math.min(24, +next.toFixed(2)));
+  zoomLabel.textContent = `${zoom.toFixed(2)}×`;
 }
 map.addEventListener("wheel", (event) => {
   if ((detailsPanelOpen && !map.classList.contains("system3d-view")) || event.target.closest(".map-controls, .map-class-filters, .map-filter-notice, .map3d-system-controls")) return;
@@ -1396,11 +1396,11 @@ map.addEventListener("wheel", (event) => {
   const focusY = event.clientY - rect.top;
   const originX = map.clientWidth / 2, originY = map.clientHeight / 2;
   const previousZoom = zoom;
-  zoom = Math.max(0.8, Math.min(3.5, zoom * Math.exp(-event.deltaY * 0.0012)));
+  zoom = Math.max(0.12, Math.min(24, zoom * Math.exp(-event.deltaY * 0.0012)));
   const scale = zoom / previousZoom;
   panX = focusX - originX - (focusX - originX - panX) * scale;
   panY = focusY - originY - (focusY - originY - panY) * scale;
-  zoomLabel.textContent = `${zoom.toFixed(1)}x`;
+  zoomLabel.textContent = `${zoom.toFixed(2)}x`;
 }, { passive: false });
 map.addEventListener("pointerdown", (event) => {
   if (detailsPanelOpen && !map.classList.contains("system3d-view")) return;
@@ -1439,12 +1439,12 @@ window.addEventListener("pointermove", (event) => {
       const centerX = (points[0].x + points[1].x) / 2 - rect.left;
       const centerY = (points[0].y + points[1].y) / 2 - rect.top;
       const originX = map.clientWidth / 2, originY = map.clientHeight / 2;
-      zoom = Math.max(0.8, Math.min(3.5, pinchStart.zoom * distance / pinchStart.distance));
+      zoom = Math.max(0.12, Math.min(24, pinchStart.zoom * distance / pinchStart.distance));
       const worldX = originX + (pinchStart.centerX - originX - pinchStart.panX) / pinchStart.zoom;
       const worldY = originY + (pinchStart.centerY - originY - pinchStart.panY) / pinchStart.zoom;
       panX = centerX - originX - (worldX - originX) * zoom;
       panY = centerY - originY - (worldY - originY) * zoom;
-          zoomLabel.textContent = `${zoom.toFixed(1)}Ã—`;
+          zoomLabel.textContent = `${zoom.toFixed(2)}Ã—`;
       event.preventDefault();
       return;
     }
@@ -1588,7 +1588,7 @@ function addMessage(text, who) {
   sender.className = "message-sender";
   sender.textContent = who === "user" ? "TU" : "DATA";
   const paragraph = document.createElement("p");
-  paragraph.textContent = text;
+  paragraph.textContent = String(text ?? "").replace(/\r\n?/g, "\n").trim();
   bubble.append(sender, paragraph);
   row.appendChild(bubble);
   chatMessages.appendChild(row);
@@ -1781,6 +1781,7 @@ async function sendToData(text) {
       body: JSON.stringify({
         query: question,
         max_results: 3,
+        system_context: contextForQuestion(question),
       }),
     });
 

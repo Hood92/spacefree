@@ -30,6 +30,7 @@ const localOrigins = [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`];
 const externalCache = new Map();
 const externalRequests = new Map();
 const CACHE_DIR = path.join(__dirname, ".cache");
+const ORBITAL_FALLBACK_FILE = path.join(__dirname, "orbital-fallback.json");
 const allowedOrigins = [
   ...localOrigins,
   ...(process.env.CORS_ORIGIN || "")
@@ -214,11 +215,23 @@ app.get("/api/orbital-objects", async (req, res) => {
       }
     }
     const allObjects = [...unique.values()];
+    if (!allObjects.length) throw new Error("CelesTrak ha restituito un catalogo vuoto.");
     const fetchedAt = Math.min(...collections.map((item) => item.fetchedAt));
     const stale = collections.some((item) => item.stale);
-    res.set("Cache-Control", "public, max-age=7200").json({ group, objects: allObjects.slice(0, limit), total: allObjects.length, updatedAt: new Date(fetchedAt).toISOString(), stale, source: "CelesTrak" });
+    res.set("Cache-Control", "public, max-age=7200").json({ group, objects: allObjects.slice(0, limit), total: allObjects.length, updatedAt: new Date(fetchedAt).toISOString(), stale, fallback: false, source: "CelesTrak" });
   } catch (error) {
     console.error(`Dati orbitali CelesTrak (${group}) non disponibili:`, error.message);
+    if (["stations", "active", "visual"].includes(group)) {
+      try {
+        const snapshot = JSON.parse(await fs.readFile(ORBITAL_FALLBACK_FILE, "utf8"));
+        const objects = Array.isArray(snapshot.objects) ? snapshot.objects : [];
+        if (objects.length) {
+          return res.set("Cache-Control", "no-store").json({ group, objects: objects.slice(0, limit), total: objects.length, updatedAt: new Date(snapshot.fetchedAt).toISOString(), stale: true, fallback: true, source: snapshot.source || "Snapshot CelesTrak locale" });
+        }
+      } catch (fallbackError) {
+        console.error("Snapshot orbitale locale non disponibile:", fallbackError.message);
+      }
+    }
     res.status(502).json({ error: "Dati orbitali temporaneamente non disponibili. Riprova più tardi." });
   }
 });

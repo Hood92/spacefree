@@ -3,36 +3,30 @@
     "https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js",
     "https://unpkg.com/satellite.js@5.0.0/dist/satellite.min.js",
   ];
-  const satelliteModuleSources = [
-    "https://esm.sh/satellite.js@5.0.0",
-    "https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/+esm",
-  ];
   let satelliteLibraryPromise;
 
   function loadSatelliteLibrary() {
     if (window.satellite?.json2satrec) return Promise.resolve(window.satellite);
     if (satelliteLibraryPromise) return satelliteLibraryPromise;
     satelliteLibraryPromise = (async () => {
-      for (const source of satelliteModuleSources) {
-        try {
-          const library = await import(source);
-          if (library.json2satrec && library.propagate && library.gstime) {
-            window.satellite = library;
-            return library;
-          }
-        } catch { /* Prova il CDN successivo o il bundle UMD. */ }
-      }
       for (const source of satelliteSources) {
         const loaded = await new Promise((resolve) => {
           const script = document.createElement("script");
+          const timeout = window.setTimeout(() => finish(false), 6000);
+          const finish = (ok) => {
+            window.clearTimeout(timeout);
+            script.onload = script.onerror = null;
+            if (!ok) script.remove();
+            resolve(ok && Boolean(window.satellite?.json2satrec && window.satellite?.propagate));
+          };
           script.src = source;
-          script.onload = () => resolve(Boolean(window.satellite?.json2satrec));
-          script.onerror = () => resolve(false);
+          script.onload = () => finish(true);
+          script.onerror = () => finish(false);
           document.head.appendChild(script);
         });
         if (loaded) return window.satellite;
       }
-      throw new Error("Libreria SGP4 non raggiungibile");
+      throw new Error("Libreria SGP4 non raggiungibile dai CDN");
     })().catch((error) => {
       satelliteLibraryPromise = null;
       throw error;
@@ -176,6 +170,32 @@
       document.getElementById("earth-object-epoch").textContent = object.EPOCH ? new Date(object.EPOCH).toLocaleString("it-IT") : "n.d.";
     }
 
+    function propagateKepler(object, date) {
+      const meanMotion = Number(object.MEAN_MOTION);
+      const eccentricity = Number(object.ECCENTRICITY);
+      const inclination = Number(object.INCLINATION) * Math.PI / 180;
+      const ascendingNode = Number(object.RA_OF_ASC_NODE) * Math.PI / 180;
+      const argumentPerigee = Number(object.ARG_OF_PERICENTER) * Math.PI / 180;
+      const meanAnomaly = Number(object.MEAN_ANOMALY) * Math.PI / 180;
+      const epoch = Date.parse(object.EPOCH);
+      if (![meanMotion, eccentricity, inclination, ascendingNode, argumentPerigee, meanAnomaly, epoch].every(Number.isFinite) || meanMotion <= 0 || eccentricity < 0 || eccentricity >= 1) return null;
+      const n = meanMotion * 2 * Math.PI / 86400;
+      const semiMajorAxis = Math.cbrt(398600.4418 / (n * n));
+      const mean = meanAnomaly + n * ((date.getTime() - epoch) / 1000);
+      let eccentricAnomaly = mean;
+      for (let iteration = 0; iteration < 8; iteration++) eccentricAnomaly -= (eccentricAnomaly - eccentricity * Math.sin(eccentricAnomaly) - mean) / (1 - eccentricity * Math.cos(eccentricAnomaly));
+      const xOrbit = semiMajorAxis * (Math.cos(eccentricAnomaly) - eccentricity);
+      const yOrbit = semiMajorAxis * Math.sqrt(1 - eccentricity * eccentricity) * Math.sin(eccentricAnomaly);
+      const cosO = Math.cos(ascendingNode), sinO = Math.sin(ascendingNode);
+      const cosW = Math.cos(argumentPerigee), sinW = Math.sin(argumentPerigee);
+      const cosI = Math.cos(inclination), sinI = Math.sin(inclination);
+      return {
+        x: (cosO * cosW - sinO * sinW * cosI) * xOrbit + (-cosO * sinW - sinO * cosW * cosI) * yOrbit,
+        y: (sinO * cosW + cosO * sinW * cosI) * xOrbit + (-sinO * sinW + cosO * cosW * cosI) * yOrbit,
+        z: sinW * sinI * xOrbit + cosW * sinI * yOrbit,
+      };
+    }
+
     function propagatePositions(now = Date.now()) {
       if (!satrecEntries.length) return;
       const date = new Date(now);
@@ -184,7 +204,11 @@
       let valid = 0;
       for (let index = 0; index < satrecEntries.length; index++) {
         let state;
-        try { state = window.satellite.propagate(satrecEntries[index].satrec, date); }
+        try {
+          state = satrecEntries[index].satrec && window.satellite?.propagate
+            ? window.satellite.propagate(satrecEntries[index].satrec, date)
+            : { position: propagateKepler(satrecEntries[index].object, date) };
+        }
         catch { continue; }
         const position = state?.position;
         if (!position || !Number.isFinite(position.x + position.y + position.z)) continue;
@@ -203,7 +227,8 @@
       satelliteGeometry.computeBoundingSphere();
       currentObjects = propagatedObjects;
       const computed = new Date(now).toLocaleTimeString("it-IT");
-      document.getElementById("earth-orbit-status").textContent = `Posizioni SGP4 calcolate alle ${computed} · elementi del catalogo: ${new Date(section.dataset.updatedAt).toLocaleString("it-IT")}`;
+      const method = satrecEntries.some((entry) => entry.satrec) ? "SGP4" : "Kepler (approssimazione)";
+      document.getElementById("earth-orbit-status").textContent = `Posizioni ${method} calcolate alle ${computed} · elementi del catalogo: ${new Date(section.dataset.updatedAt).toLocaleString("it-IT")}`;
     }
 
     async function loadGroup(group) {
@@ -214,29 +239,47 @@
       document.querySelectorAll("[data-orbit-group]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.orbitGroup === group)));
       document.getElementById("earth-orbit-status").textContent = "Caricamento degli elementi orbitali…";
       try {
-        const library = await loadSatelliteLibrary();
+        let library = null;
+        try { library = await loadSatelliteLibrary(); }
+        catch (error) { console.warn("Libreria SGP4 non disponibile; uso la propagazione kepleriana di riserva:", error.message); }
         loadingStage = "API CelesTrak";
-        const response = await fetch(`/api/orbital-objects?group=${encodeURIComponent(group)}&limit=12000`);
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 32000);
+        let response;
+        try {
+          response = await fetch(`/api/orbital-objects?group=${encodeURIComponent(group)}&limit=12000`, { signal: controller.signal, headers: { Accept: "application/json" } });
+        } finally {
+          window.clearTimeout(timeout);
+        }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const payload = await response.json();
         if (requestId !== groupRequest) return;
+        if (!Array.isArray(payload.objects) || !payload.objects.length) throw new Error("Il catalogo orbitale non contiene oggetti validi.");
         const catalogStatus = document.getElementById("earthCatalogStatus");
-        catalogStatus.textContent = `${payload.stale ? "Cache CelesTrak" : "CelesTrak"} · elementi del ${new Date(payload.updatedAt).toLocaleString("it-IT")}`;
+        catalogStatus.textContent = `${payload.fallback ? "Snapshot locale" : payload.stale ? "Cache CelesTrak" : "CelesTrak"} · elementi del ${new Date(payload.updatedAt).toLocaleString("it-IT")}`;
         document.getElementById("earth-orbit-retry").hidden = true;
         const records = [];
         for (const object of payload.objects || []) {
           try {
-            const satrec = library.json2satrec(object);
-            if (satrec && !satrec.error) records.push({ satrec, object });
+            const satrec = library?.json2satrec(object) || null;
+            const hasKeplerElements = Number(object.MEAN_MOTION) > 0 && Number.isFinite(Date.parse(object.EPOCH));
+            if ((satrec && !satrec.error) || hasKeplerElements) records.push({ satrec: satrec && !satrec.error ? satrec : null, object });
           } catch { /* Scarta i record orbitali non validi senza interrompere il catalogo. */ }
         }
+        if (!records.length) throw new Error("Gli elementi ricevuti non sono compatibili con il parser OMM/SGP4.");
         satrecEntries = records;
         satelliteGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(records.length * 3), 3));
         satelliteGeometry.setDrawRange(0, records.length);
         satellitePoints.material.color.set(group === "debris" ? 0xff9b70 : group === "stations" ? 0xb8f93a : 0x82d8ff);
         section.dataset.updatedAt = payload.updatedAt;
         document.getElementById("earth-object-count").textContent = `${records.length.toLocaleString("it-IT")} oggetti propagati · ${group}`;
-        document.getElementById("earth-object-note").textContent = payload.stale ? "Fonte non raggiungibile: sono mostrati gli ultimi elementi memorizzati." : "Selezione calcolata dagli elementi orbitali del catalogo; clicca un punto per i dettagli.";
+        document.getElementById("earth-object-note").textContent = payload.fallback
+          ? "Connessione non disponibile: snapshot locale di stazioni spaziali, non aggiornato in tempo reale."
+          : payload.stale
+            ? "Fonte non raggiungibile: sono mostrati gli ultimi elementi memorizzati."
+            : library
+              ? "Posizioni calcolate con SGP4 dagli elementi orbitali del catalogo; clicca un punto per i dettagli."
+              : "SGP4 non disponibile: posizioni kepleriane indicative, basate sugli elementi del catalogo; clicca un punto per i dettagli.";
         lastPropagation = 0;
         propagatePositions();
       } catch (error) {

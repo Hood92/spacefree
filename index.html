@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#04111d" />
+    <meta name="spacefree-api-base" content="" />
     <meta
       name="description"
       content="Una mappa interattiva dei sistemi planetari più vicini alla Terra."
@@ -87,6 +88,7 @@
             </button>
             <span class="catalog-count" id="catalogSystemCount">26 sistemi catalogati</span>
             <span class="catalog-status" id="catalogStatus">Catalogo NASA in caricamento…</span>
+            <span class="catalog-status" id="galaxyPositionStatus"></span>
             <div class="map-filter-options" id="mapFilterOptions" role="group" aria-label="Filtra sistemi, pianeti, buchi neri e sonde">
             <button type="button" data-planet-filter="rocky">Rocciosi</button>
             <button type="button" data-planet-filter="gas">Gassosi</button>
@@ -158,8 +160,8 @@
             <button class="details-close" id="closeDetailsPanel" type="button" aria-label="Chiudi dettagli">×</button>
           </div>
           <div class="planet-search-control">
-            <label for="planetSearch">CERCA UN PIANETA · POI AVVIA IL VIAGGIO</label>
-            <input id="planetSearch" type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="planetSearchResults" placeholder="Nome o iniziali del pianeta" autocomplete="off">
+            <label for="planetSearch">CERCA UN SISTEMA O UN PIANETA</label>
+            <input id="planetSearch" type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="planetSearchResults" placeholder="Nome del sistema o del pianeta" autocomplete="off">
             <div id="planetSearchResults" class="planet-search-results" role="listbox" hidden></div>
           </div>
           <div class="similar-planet-control">
@@ -225,6 +227,13 @@
           <button type="button" data-orbit-group="visual" aria-pressed="false">Satelliti visibili</button>
           <button type="button" data-orbit-group="active" aria-pressed="true">Attivi</button>
           <button type="button" data-orbit-group="debris" aria-pressed="false">Detriti catalogati</button>
+        </div>
+        <div class="earth-history-control">
+          <label for="earthYearSlider">ANNO IMMAGINE SATELLITARE <output id="earthYearValue">2026</output></label>
+          <input id="earthYearSlider" type="range" min="2000" max="2026" step="1" value="2026">
+          <span id="earthYearStatus" role="status">In attesa dell'immagine satellitare.</span>
+          <span>Metriche climatiche storiche non disponibili.</span>
+          <a class="earth-test-link" href="earth-test.html">Test del globo con texture locale</a>
         </div>
         <div class="earth-orbit-layout">
           <div class="earth-orbit-stage" id="earth-orbit-stage">
@@ -336,6 +345,7 @@
       </button>
       <div id="missionContent" class="missionBubble"></div>
     </dialog>
+    <script src="exoplanet-catalog.js"></script>
     <script src="main.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r158/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>

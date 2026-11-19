@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="favicon.svg">
+  <title>Test locale del globo terrestre</title>
+  <style>
+    body { margin: 0; background: #071722; color: #e3efec; font: 1rem/1.5 system-ui, sans-serif; }
+    main { max-width: 70rem; padding: 1rem; margin: auto; }
+    a { color: #b8f93a; }
+    h1 { margin-bottom: .4rem; }
+    p { margin: .4rem 0; }
+    #earth-orbit-canvas { height: min(72vh, 48rem); background: #030e17; border-radius: .5rem; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  </style>
+  <script defer src="node_modules/three/build/three.min.js"></script>
+  <script defer src="earth-orbit.js"></script>
+</head>
+<body>
+  <main id="earth-orbit" data-earth-mode="local">
+    <a href="./#earth-orbit">Torna all'atlante orbitale</a>
+    <h1>Test locale del globo terrestre</h1>
+    <p id="earthYearStatus" role="status">Caricamento della texture locale…</p>
+    <p>Trascina per ruotare il globo. Usa la rotella o due dita per cambiare lo zoom.</p>
+    <div id="earth-orbit-canvas" aria-label="Globo 3D con una singola texture locale"></div>
+  </main>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      if (window.THREE && window.initializeEarthOrbit) {
+        window.initializeEarthOrbit(window.THREE);
+      } else {
+        document.getElementById("earthYearStatus").textContent = "Renderer Three.js locale non disponibile.";
+      }
+    });
+  </script>
+</body>
+</html>

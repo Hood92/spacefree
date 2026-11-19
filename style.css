@@ -1715,6 +1715,84 @@ body {
   outline: none;
   text-shadow: 0 0 8px rgba(255, 190, 95, 0.9), 0 1px 5px #04111d;
 }
+.map3d-galaxy-label {
+  box-sizing: border-box;
+  height: 20px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: #deeff0;
+  font-size: 10px;
+  text-align: left;
+  overflow: visible;
+  transform: none;
+  text-shadow: 0 1px 3px #04111d, 0 0 5px #04111d;
+}
+.map3d-galaxy-label > span { display: block; overflow: hidden; text-overflow: ellipsis; }
+.map3d-galaxy-label::before {
+  content: "";
+  position: absolute;
+  left: var(--marker-x);
+  top: var(--marker-y, 50%);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--system-marker-color);
+  box-shadow: 0 0 0 2px #04111d, 0 0 7px var(--system-marker-color);
+  transform: translate(-50%, -50%);
+}
+.map3d-galaxy-label-priority {
+  z-index: 3;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: rgba(5, 20, 31, 0.9);
+  color: #f2fbff;
+  font-size: 12px;
+}
+.map3d-galaxy-label-priority::before,
+.map3d-galaxy-label:focus-visible::before {
+  width: 10px;
+  height: 10px;
+  outline: 1px solid var(--system-marker-color);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 2px #04111d, 0 0 11px 2px var(--system-marker-color);
+}
+.map3d-special-marker {
+  position: absolute;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--lime);
+  border-radius: 7px;
+  background: #142911;
+  color: var(--lime);
+  box-shadow: 0 0 0 2px #04111d, 0 0 10px #b8f93a59;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+.map3d-special-marker::before { content: ""; width: 10px; height: 10px; background: currentColor; transform: rotate(45deg); }
+.map3d-special-marker[data-marker-kind="historic"] { border-style: dashed; }
+.map3d-special-marker[data-marker-kind="historic"]::before { background: transparent; border: 1px solid currentColor; transform: none; }
+.map3d-special-marker[data-marker-kind="blackhole"] { border-radius: 50%; }
+.map3d-special-marker[data-marker-kind="blackhole"]::before { background: transparent; border: 2px solid currentColor; border-radius: 50%; transform: none; }
+.map3d-special-marker:hover,
+.map3d-special-marker:focus-visible,
+.map3d-special-marker-selected { background: #264316; outline: 1px solid var(--lime); outline-offset: 3px; }
+.map3d-marker-leader {
+  position: absolute;
+  z-index: 3;
+  height: 1px;
+  background: #b8f93a99;
+  transform-origin: left center;
+  pointer-events: none;
+}
+.map3d-special-marker[hidden],
+.map3d-marker-leader[hidden] { display: none; }
+#galaxyPositionStatus { display: block; }
 .map3d-hud {
   position: absolute;
   z-index: 5;
@@ -1899,6 +1977,7 @@ body {
     width: min(310px, calc(100% - 18px));
     max-height: 43%;
   }
+  .map-special-filter .filter-summary-panel { max-height: min(30%, 156px); }
   .map-controls .map-orbit-toggle {
     display: grid;
   }
@@ -1994,16 +2073,16 @@ body {
 }
 .earth-orbit-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 270px;
-  min-height: 410px;
+  grid-template-columns: minmax(0, 2fr) minmax(250px, 0.65fr);
+  min-height: 820px;
   overflow: hidden;
   border: 1px solid rgba(139, 187, 196, 0.13);
   border-radius: 8px;
   background: #030e17;
 }
-.earth-orbit-stage { position: relative; min-width: 0; min-height: 410px; overflow: hidden; }
+.earth-orbit-stage { position: relative; min-width: 0; min-height: 820px; overflow: hidden; }
 #earth-orbit-canvas { position: absolute; inset: 0; }
-#earth-orbit-canvas canvas { display: block; width: 100%; height: 100%; }
+#earth-orbit-canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .earth-orbit-hud {
   position: absolute;
   z-index: 2;
@@ -2039,10 +2118,17 @@ body {
 .earth-object-panel dd { margin: 0; color: #d3e2df; font: 8px "DM Mono", monospace; text-align: right; }
 .earth-object-panel p { margin: 16px 0 10px; color: #9aafb5; font-size: 10px; line-height: 1.6; }
 .earth-object-panel > small { color: #6f8992; font: 8px/1.6 "DM Mono", monospace; }
+.earth-history-control { display: grid; gap: 7px; margin: 12px 0 18px; padding: 11px 14px; border-left: 3px solid var(--lime); background: rgba(8, 26, 38, .78); }
+.earth-history-control label { display: flex; justify-content: space-between; color: #a9bec4; font: 8px "DM Mono", monospace; letter-spacing: .08em; }
+.earth-history-control output { color: var(--lime); font-size: 11px; }
+.earth-history-control input { width: 100%; accent-color: var(--lime); }
+.earth-history-control span { color: #8199a3; font: 8px/1.5 "DM Mono", monospace; }
+.earth-test-link { justify-self: start; color: var(--lime); font-size: 11px; }
 @media (max-width: 800px) {
   .earth-orbit-header { align-items: flex-start; flex-direction: column; }
   .earth-orbit-source { text-align: left; }
   .earth-orbit-layout { grid-template-columns: 1fr; }
+  .earth-orbit-stage { min-height: 820px; }
   .earth-object-panel { border-left: 0; border-top: 1px solid rgba(139, 187, 196, 0.13); }
 }
 .map-panel.map3d-ready > .system-nodes,

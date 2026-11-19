@@ -13,6 +13,18 @@ class OllamaService:
             "Usa il contesto fornito per rispondere ai quesiti astronomici."
         )
 
+    def model_available(self) -> bool:
+        response = requests.get(f"{self.base_url.rstrip('/')}/api/tags", timeout=(2, 3))
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict) or not isinstance(payload.get("models"), list):
+            raise ValueError("Elenco modelli Ollama non valido")
+        model = self.model if ":" in self.model.rsplit("/", 1)[-1] else f"{self.model}:latest"
+        return any(
+            isinstance(entry, dict) and model in (entry.get("model"), entry.get("name"))
+            for entry in payload["models"]
+        )
+
     def generate_response(self, prompt: str) -> str:
         payload = {
             "model": self.model,

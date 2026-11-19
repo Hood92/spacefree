@@ -1,3 +1,8 @@
+const DEFAULT_GALAXY_ID = "milky-way";
+const atlasGalaxies = new Map([
+  [DEFAULT_GALAXY_ID, { name: "Via Lattea", diagram: "Spirale schematica" }],
+]);
+
 const systems = {
   sol: {
     number: "01 / 26",
@@ -870,7 +875,7 @@ const missionsByPlanet = {
   ],
 };
 
-// Distanze e classificazioni dei buchi neri sono reali; le coordinate della mappa restano schematiche.
+// Le schede documentano le fonti; la mappa richiede una posizione esplicita.
 const mapObjects = [
   { id: "bh-gaia1", kind: "blackhole", name: "Gaia BH1", distance: "1.560 A.L.", detail: "Buco nero stellare in Ofiuco, il più vicino noto con compagna stellare in orbita ampia.", source: "https://www.esa.int/Science_Exploration/Space_Science/Gaia/Gaia_discovers_a_new_family_of_black_holes", discoverer: "Kareem El-Badry e il team Gaia, con dati astrometrici delle stelle compagne" },
   { id: "bh-gaia2", kind: "blackhole", name: "Gaia BH2", distance: "3.800 A.L.", detail: "Buco nero stellare nella costellazione del Centauro, individuato grazie al moto della sua stella compagna.", source: "https://www.esa.int/Science_Exploration/Space_Science/Gaia/Gaia_discovers_a_new_family_of_black_holes", discoverer: "Kareem El-Badry, Yvette Cendes e il team Gaia" },
@@ -889,6 +894,39 @@ const probes = [
   { id: "probe-parker", name: "Parker Solar Probe", distance: "orbita solare", status: "Attiva · studio della corona", launched: "12 agosto 2018", history: "Prima sonda a volare attraverso la corona solare. Le orbite ravvicinate misurano vento solare, campi magnetici e particelle energetiche.", construction: "Progettata e costruita dal Johns Hopkins Applied Physics Laboratory; lo scudo termico in carbonio protegge gli strumenti dalle temperature estreme.", engineer: "Andrew Driesman — project manager della missione presso APL.", image: "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/solar/2023/09/p/a/parkerlaunch.jpg?crop=faces%2Cfocalpoint&fit=crop&h=600&w=900", source: "https://science.nasa.gov/3d-resources/parker-solar-probe/" },
   { id: "probe-perseverance", name: "Perseverance", distance: "Marte · sistema solare", status: "Attiva · esplorazione di Marte", launched: "30 luglio 2020", history: "Rover nel cratere Jezero: cerca tracce di antichi ambienti abitabili e raccoglie campioni per una futura campagna di ritorno.", construction: "Costruito e gestito dal Jet Propulsion Laboratory, con sistema di campionamento, fotocamere scientifiche e l'elicottero dimostrativo Ingenuity.", engineer: "Jennifer Trosper — ingegnera e project manager della missione Mars 2020.", image: "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/mars/downloadable_items/4/4/44767_PIA23828-MAINimage-RoverNamePlates-KSC-20200407-PH-JPL01_0006.jpg?crop=faces%2Cfocalpoint&fit=clip&h=600&w=900", source: "https://science.nasa.gov/mission/mars-2020-perseverance/" },
 ];
+
+for (const [id, system] of Object.entries(systems)) {
+  Object.assign(system, {
+    galaxyId: DEFAULT_GALAXY_ID,
+    dataSource: "local-atlas",
+    positionStatus: id === "sol" ? "reference" : "unavailable",
+  });
+}
+const blackHoleAstrometry = {
+  "bh-gaia1": { ra: 262.17125, dec: -0.58111, parsecs: 477, source: "https://doi.org/10.1093/mnras/stac3140" },
+  "bh-gaia2": { ra: 207.56958, dec: -59.23889, parsecs: 1160, source: "https://doi.org/10.1093/mnras/stad799" },
+  "bh-gaia3": { ra: 294.82785, dec: 14.93092, parsecs: 590.6, source: "https://doi.org/10.1051/0004-6361/202449763" },
+  "bh-cygx1": { ra: 299.59032, dec: 35.20161, parsecs: 2220, source: "https://doi.org/10.1126/science.abb3363", directionSource: "https://simbad.u-strasbg.fr/simbad/sim-basic?Ident=Cygnus+X-1" },
+};
+for (const item of mapObjects) {
+  const astrometry = blackHoleAstrometry[item.id];
+  Object.assign(item, {
+    galaxyId: DEFAULT_GALAXY_ID,
+    positionStatus: astrometry ? "catalog" : "reference",
+    positionNote: astrometry ? "Posizione del sistema da astrometria pubblicata · distanza stimata" : "Riferimento del centro galattico",
+    ...(astrometry && {
+      ra: astrometry.ra, dec: astrometry.dec, distanceLy: astrometry.parsecs * 3.26156,
+      positionSource: astrometry.source, directionSource: astrometry.directionSource,
+    }),
+  });
+}
+for (const probe of probes) {
+  Object.assign(probe, {
+    galaxyId: DEFAULT_GALAXY_ID, positionStatus: "solar-anchor",
+    positionNote: "Richiamo al Sistema Solare · posizione individuale non rappresentata",
+    historic: probe.status.startsWith("Storica"),
+  });
+}
 
 const els = {
   name: document.getElementById("systemName"),
@@ -962,6 +1000,21 @@ function showMissionCard(item) {
     : '<svg class="mission-illustration" viewBox="0 0 640 260" role="img" aria-label="Illustrazione tecnica schematica di una sonda spaziale"><g fill="#d9e9df" stroke="#8ce2ea" stroke-width="2"><path d="M293 113 333 96 347 119 322 145 295 138Z"/><path d="m300 110-80-37-17 13 77 54ZM337 111l82-39 17 12-81 57Z"/><path d="m320 142-4 42 13 9 10-47Z"/><path d="m299 119-28 16 6 10 31-13Z"/></g><circle cx="323" cy="122" r="12" fill="#ffbd78"/><path d="M115 206h410M160 224h320" stroke="#668c9c" stroke-opacity=".35" stroke-width="2"/><g fill="#eaf5ed"><circle cx="112" cy="52" r="2"/><circle cx="503" cy="62" r="2"/><circle cx="531" cy="165" r="1.5"/></g></svg>';
   const visual = `<div class="mission-visual">${illustration}${item.image ? `<img class="mission-image" src="${item.image}" alt="${item.title}" onload="this.previousElementSibling.hidden=true" onerror="this.hidden=true">` : ""}</div>`;
   content.innerHTML = `${visual}<div class="mission-body"><span class="mission-eyebrow">${item.eyebrow}</span><h2 id="missionTitle">${item.title}</h2>${item.launched ? `<p class="mission-date">Lancio · ${item.launched}</p>` : ""}<h3>Diario della missione</h3><p>${item.history}</p><h3>Progettazione e costruzione</h3><p>${item.construction}</p><h3>${isBlackHole ? "Scoperta scientifica" : "Figure di riferimento"}</h3><p>${item.discoverer || item.engineer || "Team scientifico della missione."}</p><a class="mission-source" href="${item.source}" target="_blank" rel="noopener noreferrer">Fonte NASA / ESA ↗</a><p class="mission-credit">Immagini da NASA / JPL / ESA; illustrazione schematica quando indicato.</p></div>`;
+  if (item.positionNote) {
+    const note = document.createElement("p");
+    note.className = "mission-date";
+    note.textContent = item.positionNote;
+    for (const [url, text] of [[item.positionSource, "Studio astrometrico"], [item.directionSource, "Coordinate SIMBAD"]]) {
+      if (!url) continue;
+      const link = document.createElement("a");
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = text;
+      note.append(" · ", link);
+    }
+    content.querySelector("#missionTitle").after(note);
+  }
   const dialog = document.getElementById("missionDialog");
   if (!dialog.open) dialog.showModal();
 }
@@ -1018,17 +1071,20 @@ function updatePlanetSearchResults() {
     return;
   }
   for (const [systemId, system] of Object.entries(systems)) {
+    if (normalizeItalian(system.shortName).includes(query) || (systemId === "sol" && "sistema solare".includes(query))) {
+      planetSearchMatches.push({ systemId, system, name: systemId === "sol" ? "Sistema Solare" : system.shortName });
+    }
     for (const planet of system.planets || []) {
       if (normalizeItalian(planet.name).includes(query)) {
-        planetSearchMatches.push({ systemId, system, planet });
+        planetSearchMatches.push({ systemId, system, planet, name: planet.name });
       }
     }
   }
-  planetSearchMatches.sort((a, b) => {
-    const aPrefix = normalizeItalian(a.planet.name).startsWith(query) ? 0 : 1;
-    const bPrefix = normalizeItalian(b.planet.name).startsWith(query) ? 0 : 1;
-    return aPrefix - bPrefix || a.planet.name.localeCompare(b.planet.name, "it");
-  });
+  const rank = ({ name }) => {
+    const normalized = normalizeItalian(name);
+    return normalized === query ? 0 : normalized.startsWith(query) ? 1 : 2;
+  };
+  planetSearchMatches.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, "it"));
   planetSearchMatches = planetSearchMatches.slice(0, 10);
   for (const [index, match] of planetSearchMatches.entries()) {
     const option = document.createElement("button");
@@ -1037,18 +1093,18 @@ function updatePlanetSearchResults() {
     option.className = "planet-search-result";
     option.setAttribute("role", "option");
     option.setAttribute("aria-selected", "false");
-    option.innerHTML = `<span class="planet-orb" style="--planet-color:${match.planet.color || "#9bb8c6"}"></span><span class="planet-search-result-copy"><strong>${match.planet.name}</strong><small>${match.system.shortName}</small></span>`;
+    option.innerHTML = `<span class="planet-orb" style="--planet-color:${match.planet?.color || "#9bb8c6"}"></span><span class="planet-search-result-copy"><strong>${match.name}</strong><small>${match.planet ? match.system.shortName : "Sistema stellare"}</small></span>`;
     option.addEventListener("click", () => {
-      planetSearch.value = match.planet.name;
+      planetSearch.value = match.name;
       closePlanetSearchResults();
-      navigateToSystem(match.systemId, match.planet.name);
+      navigateToSystem(match.systemId, match.planet?.name, { source: "search" });
     });
     planetSearchResults.appendChild(option);
   }
   if (!planetSearchMatches.length) {
     const empty = document.createElement("div");
     empty.className = "planet-search-empty";
-    empty.textContent = "Nessun pianeta trovato nel catalogo";
+    empty.textContent = "Nessun sistema o pianeta trovato";
     planetSearchResults.appendChild(empty);
   }
   planetSearchResults.hidden = false;
@@ -1075,6 +1131,7 @@ document.addEventListener("pointerdown", (event) => {
 });
 
 function applyMapFilterClasses() {
+  map.classList.toggle("map-special-filter", ["blackhole", "probe", "historic-probe"].includes(activeMapFilter?.kind));
   document.querySelectorAll(".planet-card").forEach((card) => {
     const planet = systems[activeSystem]?.planets.find(
       (item) => item.name === card.dataset.planet,
@@ -1097,6 +1154,7 @@ function applyMapFilterClasses() {
 function clearMapFilter() {
   closeFilterSummary();
   activeMapFilter = null;
+  map.classList.remove("map-special-filter");
   document.querySelectorAll(".planet-card").forEach((card) =>
     card.classList.remove("filter-planet-match", "filter-planet-out"),
   );
@@ -1139,10 +1197,10 @@ function renderFilterSummary(kind) {
   filterSummaryList.replaceChildren();
   const entries = [];
   if (kind === "blackhole") {
-    mapObjects.forEach((item) => entries.push({ type: "special", id: item.id, name: item.name, detail: `BUCO NERO · ${item.distance}`, color: "#b78cff" }));
+    mapObjects.forEach((item) => entries.push({ type: "special", id: item.id, name: item.name, detail: item.positionNote, icon: "◉" }));
   } else if (kind === "probe" || kind === "historic-probe") {
-    probes.filter((item) => kind === "probe" || item.status.includes("Storica"))
-      .forEach((item) => entries.push({ type: "special", id: item.id, name: item.name, detail: `SONDA · ${item.status}`, color: "#b8f93a" }));
+    probes.filter((item) => kind === "probe" || item.historic)
+      .forEach((item) => entries.push({ type: "special", id: item.id, name: item.name, detail: item.positionNote, icon: item.historic ? "□" : "◆" }));
   } else {
     for (const [systemId, system] of Object.entries(systems)) {
       for (const planet of system.planets || []) {
@@ -1151,7 +1209,7 @@ function renderFilterSummary(kind) {
     }
   }
   document.getElementById("filterSummaryTitle").textContent = filterSummaryNames[kind] || "RISULTATI FILTRO";
-  document.getElementById("filterSummaryCount").textContent = `${entries.length} DESTINAZIONI · seleziona per impostare la rotta`;
+  document.getElementById("filterSummaryCount").textContent = `${entries.length} RISULTATI · seleziona per esplorare`;
   if (!entries.length) {
     const empty = document.createElement("div");
     empty.className = "filter-summary-empty";
@@ -1174,8 +1232,8 @@ function renderFilterSummary(kind) {
       button.dataset.specialId = entry.id;
       const icon = document.createElement("span");
       icon.className = "filter-summary-object-icon";
-      icon.style.color = entry.color;
-      icon.textContent = entry.id.startsWith("bh-") ? "◉" : "✦";
+      icon.style.color = "var(--lime)";
+      icon.textContent = entry.icon;
       button.appendChild(icon);
     }
     const copy = document.createElement("span");
@@ -1213,7 +1271,7 @@ function setMapPlanetFilter(kind) {
     mapObjects.forEach((item) => matches.add(item.id));
     planetCount = mapObjects.length;
   } else if (kind === "probe" || kind === "historic-probe") {
-    probes.filter((item) => kind === "probe" || item.status.includes("Storica"))
+    probes.filter((item) => kind === "probe" || item.historic)
       .forEach((item) => matches.add(item.id));
     planetCount = matches.size;
   } else {
@@ -1228,11 +1286,10 @@ function setMapPlanetFilter(kind) {
     }
   }
   activeMapFilter = { matches, kind, maxDistance: Infinity };
-  window.dispatchEvent(new Event("map3d-filter"));
-  applyMapFilterClasses();
   panX = 0;
   panY = 0;
   setZoom(1);
+  applyMapFilterClasses();
   const labels = {
     rocky: "pianeti rocciosi",
     gas: "giganti gassosi",
@@ -1241,12 +1298,14 @@ function setMapPlanetFilter(kind) {
     methane: "mondi con metano nei dati catalogati",
     water: "mondi con acqua o ammoniaca nei dati catalogati",
     metal: "mondi con silicati o metalli indicati nei dati",
-    blackhole: "buchi neri conosciuti (posizioni schematiche)",
-    probe: "sonde spaziali attive e storiche",
-    "historic-probe": "sonde storiche con missione conclusa o segnale cessato",
+    blackhole: "◉ astrometria pubblicata · Sagittarius A* al centro galattico",
+    probe: "◆ missioni attive · □ storiche · richiami al Sistema Solare",
+    "historic-probe": "□ sonde storiche · richiami al Sistema Solare",
   };
   document.getElementById("mapFilterText").textContent =
-    `${matches.size} oggetti evidenziati · ${planetCount} corpi compatibili · ${labels[kind]}`;
+    ["blackhole", "probe", "historic-probe"].includes(kind)
+      ? `${matches.size} oggetti · ${labels[kind]}`
+      : `${matches.size} sistemi · ${planetCount} corpi compatibili · ${labels[kind]}`;
   document.getElementById("mapFilterNotice").hidden = false;
   renderFilterSummary(kind);
 }
@@ -1738,22 +1797,49 @@ const chat = document.getElementById("dataChat");
 const launcher = document.getElementById("dataLauncher");
 const chatMessages = document.getElementById("chatMessages");
 const chatInput = document.getElementById("chatInput");
-let apiConfigured = false;
 const conversation = [];
-fetch("/api/status")
-  .then((response) => (response.ok ? response.json() : null))
+
+function apiUrl(path) {
+  const { hostname, origin, port, protocol } = window.location;
+  const configured = document.querySelector('meta[name="spacefree-api-base"]')?.content.trim();
+  const liveServer = protocol === "http:" && port === "5500" && ["127.0.0.1", "localhost", "[::1]"].includes(hostname);
+  const base = new URL(configured || (liveServer ? "http://127.0.0.1:8000" : "/"), origin);
+  if (!["http:", "https:"].includes(base.protocol) || base.username || base.password || base.search || base.hash) {
+    throw new Error("Base URL API non valida.");
+  }
+  base.pathname = base.pathname.replace(/\/+$/, "") + path;
+  return base.href;
+}
+
+async function fetchApiJson(path) {
+  const url = apiUrl(path);
+  const response = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!response.ok) throw new Error(`HTTP ${response.status} per ${url}`);
+  try {
+    return await response.json();
+  } catch {
+    throw new Error(`Risposta JSON non valida da ${url}`);
+  }
+}
+
+fetchApiJson("/api/status")
   .then((status) => {
-    apiConfigured = Boolean(status?.configured);
+    const hasModel = typeof status?.model === "string" && status.model.trim();
+    if (typeof status?.configured !== "boolean" || ((status.configured || status.provider === "ollama") && !hasModel)) {
+      throw new Error("Formato dello stato API non valido.");
+    }
     const label = document.getElementById("aiStatus");
-    label.textContent = apiConfigured
-      ? `IA configurata · ${status.model}`
-      : "archivio locale";
-    label.classList.toggle("ready", apiConfigured);
+    if (status.provider === "ollama") {
+      label.textContent = status.configured ? `Ollama · ${status.model} disponibile` : `Ollama · modello ${status.model} assente`;
+    } else {
+      label.textContent = status.configured ? `OpenRouter configurato · ${status.model}` : "OpenRouter non configurato";
+    }
+    label.classList.toggle("ready", status.configured);
   })
-  .catch(() => {
-    apiConfigured = false;
+  .catch((error) => {
+    console.warn("Stato IA non disponibile:", error.message);
     const label = document.getElementById("aiStatus");
-    label.textContent = "IA non raggiungibile";
+    label.textContent = "Stato IA non disponibile";
     label.classList.remove("ready");
   });
 function updateChatContext() {
@@ -2020,27 +2106,34 @@ document.getElementById("dataChatForm").addEventListener("submit", (event) => {
 });
 
 async function loadExpandedExoplanetCatalog() {
+  const status = document.getElementById("catalogStatus");
   try {
-    const response = await fetch("/api/exoplanets");
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const payload = await response.json();
+    const payload = await fetchApiJson("/api/exoplanets");
+    const catalogSystems = (Array.isArray(payload?.systems)
+      ? payload.systems
+      : window.buildExoplanetSystems(payload?.records))
+      .filter((system) => typeof system?.id === "string" && system.id && Array.isArray(system.planets));
+    if (!catalogSystems.length) throw new Error("La risposta non contiene sistemi extrasolari.");
     let added = 0;
-    for (const system of payload.systems || []) {
-      if (!system.id || systems[system.id]) continue;
-      systems[system.id] = system;
+    for (const system of catalogSystems) {
+      if (systems[system.id]) continue;
+      systems[system.id] = {
+        ...system,
+        galaxyId: system.galaxyId ?? DEFAULT_GALAXY_ID,
+        dataSource: system.dataSource ?? "nasa-exoplanet-archive",
+      };
       added++;
     }
-    if (!added) return;
-    notifyMapCatalogUpdate();
+    if (added) notifyMapCatalogUpdate();
     const count = document.getElementById("catalogSystemCount");
     if (count) count.textContent = `${Object.keys(systems).length} SISTEMI · NASA EXOPLANET ARCHIVE`;
-    const status = document.getElementById("catalogStatus");
-    if (status) status.textContent = `${added} sistemi extrasolari caricati · aggiornamento ${new Date(payload.updatedAt).toLocaleDateString("it-IT")}`;
-    if (planetSearch.value.trim()) updatePlanetSearchResults();
+    const date = payload.updatedAt != null ? new Date(payload.updatedAt) : null;
+    const updated = date && Number.isFinite(date.getTime()) ? ` · aggiornamento ${date.toLocaleDateString("it-IT")}` : "";
+    if (status) status.textContent = `${added ? `${added} sistemi extrasolari aggiunti` : "Catalogo NASA caricato · nessun nuovo sistema"}${updated}`;
+    if (added && planetSearch.value.trim()) updatePlanetSearchResults();
   } catch (error) {
     console.warn("Catalogo esteso degli esopianeti non disponibile:", error.message);
-    const status = document.getElementById("catalogStatus");
-    if (status) status.textContent = "Catalogo extrasolare temporaneamente non raggiungibile.";
+    if (status) status.textContent = "Catalogo extrasolare esteso non disponibile · archivio locale.";
   }
 }
 

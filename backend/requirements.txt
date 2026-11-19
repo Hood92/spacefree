@@ -5,3 +5,5 @@ pydantic
 pydantic-settings
 requests
 python-dotenv
+sgp4>=2.24
+Pillow>=10.0

@@ -82,41 +82,78 @@ document.addEventListener("DOMContentLoaded", async () => {
   const starGeometry = new THREE.BufferGeometry();
   starGeometry.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
   const galaxyGroup = new THREE.Group();
+  const overviewTilt = 0.36;
+  galaxyGroup.rotation.x = overviewTilt;
   scene.add(galaxyGroup);
+  let activeGalaxyId = DEFAULT_GALAXY_ID;
+  const galaxyLayers = new Map();
+  for (const [id, galaxy] of atlasGalaxies) {
+    const group = new THREE.Group();
+    group.name = galaxy.name;
+    group.userData.galaxyId = id;
+    group.visible = id === activeGalaxyId;
+    galaxyLayers.set(id, group);
+    galaxyGroup.add(group);
+  }
+  const milkyWay = galaxyLayers.get(DEFAULT_GALAXY_ID);
   const starfield = new THREE.Points(
     starGeometry,
     new THREE.PointsMaterial({ color: 0xc4dce8, size: 1.05, sizeAttenuation: true, transparent: true, opacity: 0.38, depthWrite: false })
   );
+  starfield.userData.positionStatus = "illustration";
   galaxyGroup.add(starfield);
 
-  // Spirale galattica procedurale: diventa protagonista quando la camera si allontana.
+  // Illustrazione procedurale statica, separata dalle posizioni del catalogo.
   const galaxyParticleCount = 18000;
   const galaxyPositions = new Float32Array(galaxyParticleCount * 3);
   const galaxyColors = new Float32Array(galaxyParticleCount * 3);
-  const armColors = [new THREE.Color(0x68bfe8), new THREE.Color(0xc39cff), new THREE.Color(0xffc778)];
+  const coreColor = new THREE.Color(0xffd49c);
+  const diskColor = new THREE.Color(0x8a9fb8);
+  const armColor = new THREE.Color(0x9acbfa);
+  const brightColor = new THREE.Color(0xe3eeff);
+  const particleColor = new THREE.Color();
+  const scatter = () => random() + random() + random() - 1.5;
+  const barAngle = 0.52;
+  const barCos = Math.cos(barAngle);
+  const barSin = Math.sin(barAngle);
   for (let i = 0; i < galaxyParticleCount; i++) {
-    const arm = i % 3;
-    const radius = 22 + Math.pow(random(), 0.72) * 940;
-    // L'orientamento grafico pone la posizione solare fra i bracci principali,
-    // nella regione schematica del Braccio di Orione.
-    const angle = arm * (Math.PI * 2 / 3) + radius * 0.012 - THREE.MathUtils.degToRad(110) + (random() - 0.5) * 0.34;
-    galaxyPositions[i * 3] = Math.cos(angle) * radius;
-    galaxyPositions[i * 3 + 1] = (random() - 0.5) * Math.max(3, 42 * (1 - radius / 1100));
-    galaxyPositions[i * 3 + 2] = Math.sin(angle) * radius * 0.68;
-    const color = armColors[arm].clone().lerp(new THREE.Color(0xffe7bd), random() * 0.42);
-    galaxyColors[i * 3] = color.r;
-    galaxyColors[i * 3 + 1] = color.g;
-    galaxyColors[i * 3 + 2] = color.b;
+    const component = random();
+    let x, y, z;
+    if (component < 0.17) {
+      const major = scatter() * 88;
+      const minor = scatter() * 29;
+      x = major * barCos - minor * barSin;
+      z = major * barSin + minor * barCos;
+      y = scatter() * (33 - 15 * Math.min(1, Math.abs(major) / 95));
+      particleColor.copy(coreColor).multiplyScalar(0.38 + random() * 0.56);
+    } else {
+      const onArm = component < 0.78;
+      const radius = onArm ? 52 + 416 * Math.pow(random(), 1.2) : 470 * Math.pow(random(), 0.74);
+      const arm = onArm ? Math.floor(random() * 4) : 0;
+      const lane = barAngle + arm * Math.PI / 2 + Math.log(radius / 52) * (2.12 + arm * 0.07);
+      const irregularity = 0.13 * Math.sin(radius * 0.044 + arm * 1.7) + scatter() * (0.27 + radius / 1900);
+      const angle = onArm ? lane + irregularity : random() * Math.PI * 2;
+      x = radius * Math.cos(angle);
+      z = radius * Math.sin(angle);
+      y = scatter() * (onArm ? 10 + radius * 0.029 : 17 + radius * 0.042);
+      const taper = 1 - THREE.MathUtils.smoothstep(radius, 290, 480) * 0.68;
+      const brightness = onArm ? (arm % 2 === 0 ? 0.62 : 0.4) : 0.28;
+      const variation = 0.42 + random() * 0.58 + (onArm ? 0.16 * Math.sin(radius * 0.077 + arm) : 0);
+      particleColor.copy(onArm ? armColor : diskColor).lerp(brightColor, random() * 0.40)
+        .multiplyScalar(brightness * taper * variation);
+    }
+    galaxyPositions.set([x, y, z], i * 3);
+    particleColor.toArray(galaxyColors, i * 3);
   }
   const macroGeometry = new THREE.BufferGeometry();
   macroGeometry.setAttribute("position", new THREE.BufferAttribute(galaxyPositions, 3));
   macroGeometry.setAttribute("color", new THREE.BufferAttribute(galaxyColors, 3));
   const macroGalaxy = new THREE.Points(macroGeometry, new THREE.PointsMaterial({
-    size: 1.75, sizeAttenuation: true, vertexColors: true, transparent: true,
+    size: 3.2, sizeAttenuation: false, vertexColors: true, transparent: true,
     opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
-  macroGalaxy.rotation.x = -0.12;
-  galaxyGroup.add(macroGalaxy);
+  macroGalaxy.userData.positionStatus = "illustration";
+  milkyWay.add(macroGalaxy);
 
   // Texture radiale condivisa: evita i quadrati visibili con SpriteMaterial senza mappa.
   const glowCanvas = document.createElement("canvas");
@@ -129,12 +166,32 @@ document.addEventListener("DOMContentLoaded", async () => {
   glowContext.fillStyle = glowGradient;
   glowContext.fillRect(0, 0, 64, 64);
   const glowTexture = new THREE.CanvasTexture(glowCanvas);
+  const markerCanvas = document.createElement("canvas");
+  markerCanvas.width = markerCanvas.height = 32;
+  const markerInk = markerCanvas.getContext("2d");
+  markerInk.fillStyle = "#ffffff";
+  markerInk.beginPath();
+  markerInk.arc(16, 16, 13, 0, Math.PI * 2);
+  markerInk.fill();
+  const markerTexture = new THREE.CanvasTexture(markerCanvas);
+  starfield.material.map = markerTexture;
+  macroGalaxy.material.map = glowTexture;
 
   const systemMeshes = [];
   const systemDecorations = [];
   const specialMeshes = [];
-  const specialDecorations = [];
-  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+  let selectedSpecialId = null;
+  const catalogBatches = new Map();
+  let galaxyCatalogRevision = 0;
+  const galaxyCaption = document.getElementById("galaxyPositionStatus");
+
+  function updateGalaxyCaption() {
+    if (!galaxyCaption) return;
+    const galaxy = atlasGalaxies.get(activeGalaxyId);
+    const mapped = systemMeshes.filter(({ userData }) => userData.galaxyId === activeGalaxyId).length;
+    const total = Object.values(systems).filter((system) => system.galaxyId === activeGalaxyId).length;
+    galaxyCaption.textContent = `${galaxy.name} · ${galaxy.diagram} · ${mapped} sistemi in mappa${total > mapped ? ` · ${total - mapped} senza posizione 3D` : ""}`;
+  }
 
   function galacticPositionFromCatalog(raDegrees, decDegrees, distanceLy) {
     const ra = THREE.MathUtils.degToRad(raDegrees);
@@ -150,43 +207,50 @@ document.addEventListener("DOMContentLoaded", async () => {
     const distance = distanceLy * GALACTIC_MAP_SCALE;
     return new THREE.Vector3(
       SUN_GALACTIC_POSITION.x - towardCenter * distance,
-      SUN_GALACTIC_POSITION.y + galacticY * distance,
-      SUN_GALACTIC_POSITION.z + galacticZ * distance
+      SUN_GALACTIC_POSITION.y + galacticZ * distance,
+      SUN_GALACTIC_POSITION.z + galacticY * distance
     );
   }
 
-  function rebuildGalaxySystems() {
+  function objectPosition(data, id = data.id) {
+    if (data.positionStatus === "solar-anchor" && data.galaxyId === DEFAULT_GALAXY_ID) {
+      return SUN_GALACTIC_POSITION.clone();
+    }
+    if (data.positionStatus === "reference" && data.galaxyId === DEFAULT_GALAXY_ID) {
+      if (id === "bh-sgra") return new THREE.Vector3();
+      if (id === "sol") return SUN_GALACTIC_POSITION.clone();
+    }
+    // Future galaxies can provide coordinates in their own, explicitly defined frame.
+    if (data.positionStatus === "catalog" && Array.isArray(data.galaxyPosition)
+        && data.galaxyPosition.length === 3 && data.galaxyPosition.every(Number.isFinite)) {
+      return new THREE.Vector3(...data.galaxyPosition);
+    }
+    const { ra, dec, distanceLy } = data;
+    if (data.galaxyId === DEFAULT_GALAXY_ID && Number.isFinite(ra) && ra >= 0 && ra < 360
+        && Number.isFinite(dec) && Math.abs(dec) <= 90 && Number.isFinite(distanceLy) && distanceLy > 0) {
+      return galacticPositionFromCatalog(ra, dec, distanceLy);
+    }
+    return null;
+  }
+
+  function disposeGalaxySystems() {
     for (const object of systemDecorations) {
-      galaxyGroup.remove(object);
+      object.removeFromParent();
       object.geometry?.dispose();
       object.material?.dispose();
     }
     systemMeshes.length = 0;
     systemDecorations.length = 0;
-    container.querySelectorAll(".map3d-star-label").forEach((label) => label.remove());
-    const entries = Object.entries(systems);
-    entries.forEach(([id, data], index) => {
-      const distance = Number(String(data.distance || "0").replace(",", ".").match(/[0-9]+(?:\.[0-9]+)?/)?.[0] || 0);
-      const hasSkyCoordinates = Number.isFinite(Number(data.ra)) && Number.isFinite(Number(data.dec)) && data.ra != null && data.dec != null;
-      let position;
-      if (id === "sol") {
-        position = SUN_GALACTIC_POSITION.clone();
-      } else if (hasSkyCoordinates) {
-        position = galacticPositionFromCatalog(Number(data.ra), Number(data.dec), distance);
-      } else {
-        // I sistemi locali preesistenti non hanno RA/Dec nel catalogo statico:
-        // si mostrano vicino al Sole in una disposizione dichiaratamente schematica.
-        const hash = [...id].reduce((value, char) => (value * 31 + char.charCodeAt(0)) >>> 0, 7);
-        const angle = (hash / 4294967296) * Math.PI * 2;
-        const y = (((hash >>> 8) / 0x1000000) * 2) - 1;
-        const horizontal = Math.sqrt(1 - y * y);
-        const localDistance = Math.max(2.2, distance * 1.55);
-        position = SUN_GALACTIC_POSITION.clone().add(new THREE.Vector3(
-          Math.cos(angle) * horizontal,
-          y,
-          Math.sin(angle) * horizontal
-        ).multiplyScalar(localDistance));
-      }
+    catalogBatches.clear();
+  }
+
+  function rebuildGalaxySystems() {
+    disposeGalaxySystems();
+    galaxyCatalogRevision++;
+    for (const [id, data] of Object.entries(systems)) {
+      const layer = galaxyLayers.get(data.galaxyId);
+      const position = layer && objectPosition(data, id);
+      if (!position) continue;
       const starDescriptor = String(data.star || "").trim().toUpperCase();
       const spectralMatch = starDescriptor.match(/^([OBAFGKM])(?=\d|\s|$)/) || starDescriptor.match(/\(\s*([OBAFGKM])(?=\d|\s|$)/);
       const spectralClass = spectralMatch?.[1] || "G";
@@ -200,80 +264,52 @@ document.addEventListener("DOMContentLoaded", async () => {
         M: { color: 0xff817e, radius: 0.048, glow: 6.9, halo: 12.6, emissive: 0.96 },
       }[spectralClass];
       const color = starVisuals.color;
-      const mesh = new THREE.Mesh(
-        // Mantieni i nodi molto più piccoli delle distanze astronomiche:
-        // alla scala galattica sfere grandi si sovrapporrebbero ai sistemi vicini.
+      const catalog = data.dataSource === "nasa-exoplanet-archive";
+      const mesh = catalog ? new THREE.Object3D() : new THREE.Mesh(
         new THREE.SphereGeometry(starVisuals.radius, 20, 16),
         new THREE.MeshStandardMaterial({
-          color,
-          emissive: color,
-          emissiveIntensity: starVisuals.emissive,
-          transparent: true,
-          opacity: 1,
-          depthWrite: false,
-          roughness: 0.38,
-          metalness: 0.04,
+          color, emissive: color, emissiveIntensity: starVisuals.emissive,
+          transparent: true, depthWrite: false, roughness: 0.38, metalness: 0.04,
         })
       );
       mesh.position.copy(position);
-      mesh.userData = { id, label: data.shortName, distanceLy: distance, spectralClass, starVisuals, filterVisible: true };
-      mesh.userData.systemDecorations = [];
-      mesh.userData.catalogOnly = id.startsWith("exo-");
-      galaxyGroup.add(mesh);
+      mesh.userData = {
+        id, galaxyId: data.galaxyId, text: id === "sol" ? "Sole" : data.shortName,
+        title: id === "sol" ? "Riferimento solare della mappa" : "Posizione da dati di catalogo",
+        catalog, color, starVisuals, systemDecorations: [],
+      };
       systemMeshes.push(mesh);
-      systemDecorations.push(mesh);
-      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color, transparent: true, opacity: 0.62, depthWrite: false, blending: THREE.AdditiveBlending }));
-      glow.position.copy(mesh.position);
-      const glowSize = starVisuals.glow;
-      glow.scale.set(glowSize, glowSize, 1);
-      glow.userData.baseSize = glowSize;
-      glow.userData.baseOpacity = 0.62;
-      glow.userData.systemId = id;
-      galaxyGroup.add(glow);
-      systemDecorations.push(glow);
-      mesh.userData.systemDecorations.push(glow);
-      {
-        const halo = new THREE.Sprite(new THREE.SpriteMaterial({
-          map: glowTexture,
-          color,
-          transparent: true,
-          opacity: 0.2,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending,
-        }));
-        halo.position.copy(mesh.position);
-        const haloSize = starVisuals.halo;
-        halo.scale.set(haloSize, haloSize, 1);
-        halo.userData.baseSize = haloSize;
-        halo.userData.baseOpacity = 0.2;
-        halo.userData.systemId = id;
-        galaxyGroup.add(halo);
-        systemDecorations.push(halo);
-        mesh.userData.systemDecorations.push(halo);
+      if (catalog) {
+        if (!catalogBatches.has(data.galaxyId)) catalogBatches.set(data.galaxyId, { markers: [] });
+        const markers = catalogBatches.get(data.galaxyId).markers;
+        mesh.userData.batchIndex = markers.length;
+        markers.push(mesh);
+        continue;
       }
-
-      const label = document.createElement("span");
-      label.className = "map3d-label map3d-star-label";
-      label.textContent = data.shortName;
-      label.title = hasSkyCoordinates
-        ? `${data.shortName} · ${data.distance} anni luce · RA ${Number(data.ra).toFixed(3)}°, Dec ${Number(data.dec).toFixed(3)}°`
-        : `${data.shortName} · ${data.distance} anni luce · coordinate schematiche`;
-      container.appendChild(label);
-      mesh.userData.labelElement = label;
-      label.tabIndex = 0;
-      label.setAttribute("role", "button");
-      label.setAttribute("aria-label", `Viaggia verso ${data.shortName}`);
-      label.addEventListener("click", (event) => {
-        event.stopPropagation();
-        if (typeof navigateToSystem === "function") navigateToSystem(id);
-      });
-      label.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          label.click();
-        }
-      });
-    });
+      layer.add(mesh);
+      systemDecorations.push(mesh);
+      for (const [size, opacity] of [[starVisuals.glow, 0.62], [starVisuals.halo, 0.2]]) {
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: glowTexture, color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending,
+        }));
+        glow.position.copy(position);
+        glow.userData = { baseSize: size, baseOpacity: opacity };
+        layer.add(glow);
+        systemDecorations.push(glow);
+        mesh.userData.systemDecorations.push(glow);
+      }
+    }
+    for (const [id, batch] of catalogBatches) {
+      const geometry = new THREE.BufferGeometry().setFromPoints(batch.markers.map((marker) => marker.position));
+      geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(batch.markers.length * 3), 3));
+      batch.points = new THREE.Points(geometry, new THREE.PointsMaterial({
+        map: markerTexture, size: 6, sizeAttenuation: false, vertexColors: true,
+        transparent: true, depthWrite: false,
+      }));
+      galaxyLayers.get(id).add(batch.points);
+      systemDecorations.push(batch.points);
+    }
+    updateGalaxyCaption();
   }
   rebuildGalaxySystems();
   // Punto di partenza visivo, indipendente dai controlli della camera.
@@ -483,97 +519,54 @@ document.addEventListener("DOMContentLoaded", async () => {
     ...(typeof mapObjects === "undefined" ? [] : mapObjects.map((item) => ({ ...item, objectType: "blackhole" }))),
     ...(typeof probes === "undefined" ? [] : probes.map((item) => ({ ...item, objectType: "probe" }))),
   ];
-  specialObjects.forEach((item, index) => {
-    const seed = [...item.id].reduce((value, char) => (value * 31 + char.charCodeAt(0)) >>> 0, 7);
-    const angle = (seed / 4294967296) * Math.PI * 2;
-    const y = ((seed >>> 8) / 0x1000000) * 1.6 - 0.8;
-    const radius = Math.sqrt(1 - y * y);
-    const distanceText = String(item.distance || "");
-    const distanceLy = item.objectType === "blackhole"
-      ? Number(distanceText.replace(/[^0-9]/g, "") || 0)
-      : Number(distanceText.replace(",", ".").match(/[0-9]+(?:\.[0-9]+)?/)?.[0] || 0);
-    const localOffset = new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius)
-      .multiplyScalar(distanceLy * GALACTIC_MAP_SCALE);
-    const isBlackHole = item.objectType === "blackhole";
-    const position = item.id === "bh-sgra"
-      ? new THREE.Vector3(0, 0, 0)
-      : isBlackHole
-        ? SUN_GALACTIC_POSITION.clone().add(localOffset)
-        : new THREE.Vector3(Math.cos(angle) * radius * 53, y * 39, Math.sin(angle) * radius * 43);
-    const mesh = new THREE.Mesh(
-      isBlackHole ? new THREE.SphereGeometry(0.08, 18, 14) : new THREE.OctahedronGeometry(0.12, 0),
-      new THREE.MeshBasicMaterial({ color: isBlackHole ? 0x090711 : 0xb8f93a, transparent: true, opacity: 1 })
-    );
-    mesh.position.copy(position);
-    mesh.userData = { id: item.id, objectType: item.objectType, filterVisible: true, filterMatch: true, baseColor: new THREE.Color(isBlackHole ? 0x090711 : 0xb8f93a), decorations: [] };
-    galaxyGroup.add(mesh);
-    specialMeshes.push(mesh);
-    const specialGlow = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: glowTexture,
-      color: isBlackHole ? 0xb78cff : 0xb8f93a,
-      transparent: true,
-      opacity: 0.78,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    }));
-    specialGlow.position.copy(position);
-    specialGlow.userData = { id: item.id, baseOpacity: 0.78, baseSize: isBlackHole ? 7 : 5.5 };
-    specialGlow.scale.set(specialGlow.userData.baseSize, specialGlow.userData.baseSize, 1);
-    galaxyGroup.add(specialGlow);
-    specialDecorations.push(specialGlow);
-    mesh.userData.decorations.push(specialGlow);
-    if (isBlackHole) {
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(0.16, 0.018, 8, 32),
-        new THREE.MeshBasicMaterial({ color: 0xb78cff, transparent: true, opacity: 0.8 })
-      );
-      ring.position.copy(position);
-      ring.rotation.x = Math.PI / 2.6;
-      ring.userData.id = item.id;
-      ring.userData.specialObject = true;
-      ring.userData.baseOpacity = 0.8;
-      galaxyGroup.add(ring);
-      specialDecorations.push(ring);
-      mesh.userData.decorations.push(ring);
-    }
-    const label = document.createElement("span");
-    label.className = "map3d-label map3d-object-label";
-    label.textContent = item.name;
-    label.title = item.distance || item.status || item.name;
-    container.appendChild(label);
-    mesh.userData.labelElement = label;
-    mesh.userData.objectIndex = index;
-    label.tabIndex = 0;
-    label.setAttribute("role", "button");
-    label.setAttribute("aria-label", `Apri i dettagli di ${item.name}`);
-    label.addEventListener("click", (event) => {
+  specialObjects.forEach((item) => {
+    const layer = galaxyLayers.get(item.galaxyId);
+    const position = layer && objectPosition(item);
+    if (!position) return;
+    const marker = new THREE.Object3D();
+    marker.position.copy(position);
+    marker.userData = { id: item.id, galaxyId: item.galaxyId, item };
+    const badge = document.createElement("button");
+    badge.type = "button";
+    badge.className = "map3d-special-marker";
+    badge.dataset.objectId = item.id;
+    badge.dataset.positionStatus = item.positionStatus;
+    badge.dataset.markerKind = item.objectType === "blackhole" ? "blackhole" : item.historic ? "historic" : "probe";
+    const category = item.objectType === "blackhole" ? "Buco nero" : item.historic ? "Sonda storica" : "Missione attiva";
+    badge.title = `${item.name} · ${category} · ${item.positionNote}`;
+    badge.setAttribute("aria-label", badge.title);
+    badge.hidden = true;
+    const leader = document.createElement("span");
+    leader.className = "map3d-marker-leader";
+    leader.hidden = true;
+    leader.setAttribute("aria-hidden", "true");
+    badge.addEventListener("pointerdown", (event) => event.stopPropagation());
+    badge.addEventListener("click", (event) => {
       event.stopPropagation();
-      travelToSpecial(mesh, item);
+      travelToSpecial(marker, item);
     });
-    label.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        label.click();
-      }
-    });
+    container.append(leader, badge);
+    Object.assign(marker.userData, { badge, leader });
+    specialMeshes.push(marker);
   });
 
   function syncSceneFilters() {
     const filter = typeof activeMapFilter === "undefined" ? null : activeMapFilter;
-    for (const mesh of systemMeshes) {
-      mesh.userData.filterVisible = true;
-      mesh.userData.filterMatch = !filter || filter.matches.has(mesh.userData.id);
-      mesh.visible = true;
+    for (const marker of [...systemMeshes, ...specialMeshes]) {
+      marker.userData.filterMatch = !filter || filter.matches.has(marker.userData.id);
     }
-    for (const mesh of specialMeshes) {
-      mesh.userData.filterVisible = true;
-      mesh.userData.filterMatch = !filter || filter.matches.has(mesh.userData.id);
-      mesh.visible = true;
+    for (const { markers, points } of catalogBatches.values()) {
+      const colors = points.geometry.attributes.color;
+      const color = new THREE.Color();
+      const tint = new THREE.Color();
+      markers.forEach((marker, index) => {
+        if (filter && marker.userData.filterMatch) color.set(0xb8f93a);
+        else color.set(0x9de6ff).lerp(tint.set(marker.userData.color), 0.3);
+        color.multiplyScalar(marker.userData.filterMatch ? 1 : 0.30);
+        colors.setXYZ(index, color.r, color.g, color.b);
+      });
+      colors.needsUpdate = true;
     }
-    for (const object of systemDecorations) {
-      if (object.userData?.systemId) object.visible = true;
-    }
-    for (const object of specialDecorations) object.visible = true;
   }
   syncSceneFilters();
   window.addEventListener("map3d-filter", syncSceneFilters);
@@ -596,7 +589,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   viewControls.innerHTML = '<button type="button" class="map3d-back">← Mappa stellare</button><div class="map3d-system-heading"><strong></strong><small>VISTA SCHEMATICA · TRASCINA PER RUOTARE · ROTELLA PER ZOOM</small></div>';
   container.appendChild(viewControls);
   const viewTitle = viewControls.querySelector("strong");
-  viewControls.querySelector("button").addEventListener("click", showGalaxy);
+  viewControls.querySelector("button").addEventListener("click", () => showGalaxy());
 
   function showGalaxy(reset = false) {
     activeSystemView = null;
@@ -605,18 +598,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     galaxyGroup.visible = true;
     cameraBaseDistance = 115;
     if (reset) {
-      galaxyGroup.rotation.set(0, 0, 0);
+      selectGalaxy(DEFAULT_GALAXY_ID);
+      galaxyGroup.rotation.set(overviewTilt, 0, 0);
       const solarSystem = systemMeshes.find((mesh) => mesh.userData.id === "sol");
       if (solarSystem) mapCameraTarget.copy(solarSystem.position);
       mapTravel = null;
       shipFlight = null;
       pendingSystemId = null;
-      pendingSpecialId = null;
+      pendingSpecialId = selectedSpecialId = null;
     }
     document.querySelector(".map-panel")?.classList.remove("system3d-view");
-    container.querySelectorAll(".map3d-label").forEach((label) => {
-      label.style.display = "";
-    });
+  }
+
+  function selectGalaxy(id) {
+    if (id === activeGalaxyId || !galaxyLayers.has(id)) return;
+    galaxyLayers.get(activeGalaxyId).visible = false;
+    activeGalaxyId = id;
+    galaxyLayers.get(id).visible = true;
+    mapCameraTarget.set(0, 0, 0);
+    updateGalaxyCaption();
   }
 
   function clearSystemGroup() {
@@ -771,6 +771,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     pendingSystemId = null;
     activeSystemView = id;
+    systemGroup.userData.galaxyId = data.galaxyId;
     clearSystemGroup();
     galaxyGroup.visible = false;
     systemGroup.visible = true;
@@ -786,6 +787,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (typeof panY === "number") panY = 0;
     document.querySelector(".map-panel")?.classList.add("system3d-view");
     viewTitle.textContent = data.shortName;
+    viewControls.querySelector("small").textContent = destination
+      ? "ORBITE SCHEMATICHE ? TRASCINA PER RUOTARE ? ROTELLA PER ZOOM"
+      : "POSIZIONE GALATTICA NON DISPONIBILE ? ORBITE SCHEMATICHE";
 
     const starColor = id === "sol" || /G[0-9]/.test(data.star) ? 0xffd98a : /A[0-9]|F[0-9]/.test(data.star) ? 0x9bdcff : /K[0-9]/.test(data.star) ? 0xffad70 : 0xff817e;
     const star = new THREE.Mesh(
@@ -882,10 +886,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function travelToSystem(id, source = "map", detailDelayMs = 0, planetName = null) {
     const destination = systemMeshes.find((mesh) => mesh.userData.id === id);
-    if (!systems[id] || !destination) return;
+    if (!systems[id]) return;
+    selectedSpecialId = null;
     pendingTravelSource = source;
     pendingTravelDetailDelayMs = detailDelayMs;
     pendingTravelPlanetName = planetName;
+    if (!destination) {
+      mapTravel = shipFlight = pendingSpecialId = null;
+      enterSystemView(id, true);
+      return;
+    }
+    selectGalaxy(destination.userData.galaxyId);
     if (activeSystemView) {
       activeSystemView = null;
       systemGroup.visible = false;
@@ -920,6 +931,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function travelToSpecial(mesh, item) {
+    selectGalaxy(mesh.userData.galaxyId);
     if (activeSystemView) {
       activeSystemView = null;
       systemGroup.visible = false;
@@ -942,7 +954,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (typeof panX === "number") panX = 0;
     if (typeof panY === "number") panY = 0;
     pendingSystemId = null;
-    pendingSpecialId = item.id;
+    pendingSpecialId = selectedSpecialId = item.id;
     pendingTravelDetailDelayMs = 0;
     const start = performance.now();
     mapTravel = { id: item.id, from, to, start, duration: 2200, startZoom, endZoom: Math.max(startZoom, 8) };
@@ -957,13 +969,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     const mesh = specialMeshes.find((candidate) => candidate.userData.id === id);
     const item = specialObjects.find((candidate) => candidate.id === id);
     if (mesh && item) travelToSpecial(mesh, item);
+    else if (item?.objectType === "blackhole") openBlackHole(id);
+    else if (item?.objectType === "probe") openProbe(id);
   };
 
   const raycaster = new THREE.Raycaster();
   raycaster.params.Points.threshold = 2;
   const pointer = new THREE.Vector2();
+  const pickWorld = new THREE.Vector3();
+  let hoveredMarker = null;
+  let systemPointer = null;
+  let labelUnderPointer = null;
+  const isActiveMarker = (marker) => marker.userData.galaxyId === activeGalaxyId;
+  function markerWorldPosition(marker, target) {
+    const layer = galaxyLayers.get(marker.userData.galaxyId);
+    return target.copy(marker.position).applyMatrix4(layer.matrixWorld);
+  }
+
   function findSystemHit(event) {
-    const directHit = raycaster.intersectObjects(systemMeshes, false)[0]?.object;
+    const directHit = raycaster.intersectObjects(systemMeshes.filter((marker) => marker.isMesh && isActiveMarker(marker)), false)[0]?.object;
     if (directHit) return directHit;
     const rect = renderer.domElement.getBoundingClientRect();
     const pointerX = event.clientX - rect.left;
@@ -972,14 +996,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     let closestDistanceSquared = 15 * 15;
     let closestDepth = Infinity;
     for (const mesh of systemMeshes) {
-      if (!mesh.userData.filterVisible) continue;
-      const worldPosition = mesh.getWorldPosition(new THREE.Vector3());
-      const projected = worldPosition.project(camera);
+      if (!isActiveMarker(mesh)) continue;
+      if (mesh.userData.catalog && mesh.userData.batchIndex >= catalogBatches.get(activeGalaxyId).points.geometry.drawRange.count) continue;
+      markerWorldPosition(mesh, pickWorld);
+      const depth = camera.position.distanceToSquared(pickWorld);
+      const projected = pickWorld.project(camera);
       if (projected.z < -1 || projected.z > 1 || Math.abs(projected.x) > 1.08 || Math.abs(projected.y) > 1.08) continue;
       const screenX = (projected.x * 0.5 + 0.5) * rect.width;
       const screenY = (-projected.y * 0.5 + 0.5) * rect.height;
       const distanceSquared = (screenX - pointerX) ** 2 + (screenY - pointerY) ** 2;
-      const depth = camera.position.distanceTo(worldPosition);
       if (distanceSquared < closestDistanceSquared || (Math.abs(distanceSquared - closestDistanceSquared) < 0.25 && depth < closestDepth)) {
         closest = mesh;
         closestDistanceSquared = distanceSquared;
@@ -987,40 +1012,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     }
     return closest;
-  }
-  function findSpecialHit(event) {
-    const directHit = raycaster.intersectObjects(specialMeshes, false)[0]?.object;
-    if (directHit) return directHit;
-    const rect = renderer.domElement.getBoundingClientRect();
-    const pointerX = event.clientX - rect.left;
-    const pointerY = event.clientY - rect.top;
-    let closest = null;
-    let closestDistanceSquared = 18 * 18;
-    let closestDepth = Infinity;
-    for (const mesh of specialMeshes) {
-      if (!mesh.userData.filterVisible) continue;
-      const worldPosition = mesh.getWorldPosition(new THREE.Vector3());
-      const projected = worldPosition.project(camera);
-      if (projected.z < -1 || projected.z > 1 || Math.abs(projected.x) > 1.08 || Math.abs(projected.y) > 1.08) continue;
-      const screenX = (projected.x * 0.5 + 0.5) * rect.width;
-      const screenY = (-projected.y * 0.5 + 0.5) * rect.height;
-      const distanceSquared = (screenX - pointerX) ** 2 + (screenY - pointerY) ** 2;
-      const depth = camera.position.distanceTo(worldPosition);
-      if (distanceSquared < closestDistanceSquared || (Math.abs(distanceSquared - closestDistanceSquared) < 0.25 && depth < closestDepth)) {
-        closest = mesh;
-        closestDistanceSquared = distanceSquared;
-        closestDepth = depth;
-      }
-    }
-    return closest;
-  }
-  function screenDistanceToMesh(event, mesh) {
-    const rect = renderer.domElement.getBoundingClientRect();
-    const projected = mesh.getWorldPosition(new THREE.Vector3()).project(camera);
-    return Math.hypot(
-      (projected.x * 0.5 + 0.5) * rect.width - (event.clientX - rect.left),
-      (-projected.y * 0.5 + 0.5) * rect.height - (event.clientY - rect.top)
-    );
   }
   renderer.domElement.addEventListener("click", (event) => {
     if (suppressMapClick) {
@@ -1061,37 +1052,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       return;
     }
-    const directSystem = raycaster.intersectObjects(systemMeshes, false)[0];
-    const directSpecial = raycaster.intersectObjects(specialMeshes, false)[0];
-    if (directSystem && (!directSpecial || directSystem.distance <= directSpecial.distance)) {
-      if (typeof navigateToSystem === "function") navigateToSystem(directSystem.object.userData.id);
-      return;
-    }
-    if (directSpecial) {
-      const item = specialObjects[directSpecial.object.userData.objectIndex];
-      if (item) travelToSpecial(directSpecial.object, item);
-      return;
-    }
     const systemHit = findSystemHit(event);
-    const specialHit = findSpecialHit(event);
-    if (systemHit && (!specialHit || screenDistanceToMesh(event, systemHit) <= screenDistanceToMesh(event, specialHit))) {
-      if (typeof navigateToSystem === "function") navigateToSystem(systemHit.userData.id);
-      return;
-    }
-    if (!specialHit) return;
-    const item = specialObjects[specialHit.userData.objectIndex];
-    if (item) travelToSpecial(specialHit, item);
+    if (systemHit) navigateToSystem(systemHit.userData.id);
   });
   renderer.domElement.addEventListener("pointermove", (event) => {
     if (activeSystemView) return;
-    const rect = renderer.domElement.getBoundingClientRect();
-    pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
-    raycaster.setFromCamera(pointer, camera);
-    const hovered = findSystemHit(event);
-    for (const mesh of systemMeshes) mesh.userData.hovered = mesh === hovered;
+    systemPointer = event.buttons ? null : { x: event.offsetX, y: event.offsetY };
   });
   renderer.domElement.addEventListener("pointerleave", () => {
-    for (const mesh of systemMeshes) mesh.userData.hovered = false;
+    systemPointer = null;
   });
   const handleMapTravel = (event) => {
     const id = event.detail?.id;
@@ -1103,6 +1072,257 @@ document.addEventListener("DOMContentLoaded", async () => {
   window.addEventListener("map3d-travel-to", handleMapTravel);
   if (window.pendingMapTravel?.id) travelToSystem(window.pendingMapTravel.id, window.pendingMapTravel.source || "map", window.pendingMapTravel.detailDelayMs || 0, window.pendingMapTravel.planetName || null);
   window.addEventListener("map3d-show-galaxy", (event) => showGalaxy(Boolean(event.detail?.reset)));
+
+  const visibleGalaxyLabels = new Map();
+  const labelProjection = new THREE.Vector3();
+  function isSpecialFilter(kind) {
+    return ["blackhole", "probe", "historic-probe"].includes(kind);
+  }
+
+  let previousSpecialFilter = null;
+  window.addEventListener("map3d-filter", () => {
+    const kind = activeMapFilter?.kind;
+    if (kind === previousSpecialFilter) return;
+    previousSpecialFilter = kind;
+    selectedSpecialId = null;
+    if (!isSpecialFilter(kind)) return;
+    selectGalaxy(DEFAULT_GALAXY_ID);
+    showGalaxy();
+    hoveredMarker = null;
+    systemPointer = null;
+    labelUnderPointer = null;
+    mapTravel = shipFlight = pendingSystemId = pendingSpecialId = null;
+    const bounds = new THREE.Box3();
+    galaxyGroup.updateMatrixWorld();
+    for (const marker of specialMeshes) {
+      if (isActiveMarker(marker) && activeMapFilter.matches.has(marker.userData.id)) {
+        bounds.expandByPoint(markerWorldPosition(marker, labelProjection));
+      }
+    }
+    if (bounds.isEmpty()) return;
+    mapCameraTarget.copy(galaxyGroup.worldToLocal(bounds.getCenter(labelProjection)));
+    const half = bounds.getSize(labelProjection).multiplyScalar(0.5);
+    const viewRadius = Math.max(half.x / camera.aspect, half.y);
+    const viewDistance = half.z + 1.65 * viewRadius / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    setZoom(Math.min(4, cameraBaseDistance * 3 / Math.max(1, viewDistance)));
+    if (container.clientWidth < 640) panY = Math.round(container.clientHeight * 0.10);
+  });
+
+  // These offsets are in screen pixels. A leader line connects a displaced badge to its anchor.
+  const badgeOffsets = [[0, 0]];
+  for (const radius of [36, 70, 102, 136]) {
+    for (let index = 0; index < 8; index++) {
+      const angle = index * Math.PI / 4;
+      badgeOffsets.push([Math.cos(angle) * radius, Math.sin(angle) * radius]);
+    }
+  }
+  const specialProjection = new THREE.Vector3();
+  const markerOverlays = document.querySelectorAll("#filterSummaryPanel, #mapFilterNotice, .map-controls");
+  function layoutSpecialMarkers(filter) {
+    const visible = !activeSystemView;
+    const filterActive = isSpecialFilter(filter?.kind);
+    const rect = container.getBoundingClientRect();
+    const obstacles = [...markerOverlays, ...visibleGalaxyLabels.values()]
+      .filter((element) => !element.hidden)
+      .map((element) => element.getBoundingClientRect())
+      .filter((bounds) => bounds.width && bounds.height);
+    const used = [];
+    const ordered = selectedSpecialId
+      ? [...specialMeshes].sort((a, b) => Number(b.userData.id === selectedSpecialId) - Number(a.userData.id === selectedSpecialId))
+      : specialMeshes;
+    for (const marker of ordered) {
+      const { id, badge, leader, item } = marker.userData;
+      const selected = id === selectedSpecialId;
+      if (!visible || !isActiveMarker(marker)
+          || !(selected || (filterActive ? filter.matches.has(id) : id === "bh-sgra" && !filter))) {
+        badge.hidden = leader.hidden = true;
+        continue;
+      }
+      markerWorldPosition(marker, specialProjection).project(camera);
+      if (Math.abs(specialProjection.x) > 1 || Math.abs(specialProjection.y) > 1 || Math.abs(specialProjection.z) > 1) {
+        badge.hidden = leader.hidden = true;
+        continue;
+      }
+      const x = (specialProjection.x + 1) * rect.width / 2;
+      const y = (1 - specialProjection.y) * rect.height / 2;
+      let placed = false;
+      for (const [dx, dy] of badgeOffsets) {
+        if (item.positionStatus === "solar-anchor" && dx === 0 && dy === 0) continue;
+        const left = x + dx;
+        const top = y + dy;
+        if (left < 16 || left > rect.width - 16 || top < 16 || top > rect.height - 16) continue;
+        const screenX = left + rect.left;
+        const screenY = top + rect.top;
+        const covers = (other) => screenX > other.left - 16 && screenX < other.right + 16
+          && screenY > other.top - 16 && screenY < other.bottom + 16;
+        if (obstacles.some(covers)) continue;
+        if (used.some((point) => Math.abs(point.x - left) < 34 && Math.abs(point.y - top) < 34)) continue;
+        used.push({ x: left, y: top });
+        placed = true;
+        badge.hidden = false;
+        badge.classList.toggle("map3d-special-marker-selected", selected);
+        badge.style.left = `${left}px`;
+        badge.style.top = `${top}px`;
+        leader.hidden = !dx && !dy;
+        if (!leader.hidden) {
+          leader.style.left = `${x}px`;
+          leader.style.top = `${y}px`;
+          leader.style.width = `${Math.hypot(dx, dy)}px`;
+          leader.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
+        }
+        break;
+      }
+      if (!placed) badge.hidden = leader.hidden = true;
+    }
+  }
+
+  let nextLabelLayout = 0;
+  let lastLabelState = [];
+  let galaxyFocus = null;
+  const closeGalaxyZoom = 7;
+
+  function layoutGalaxyLabels(mapZoom, filter) {
+    const now = performance.now();
+    if (now < nextLabelLayout) return;
+    nextLabelLayout = now + 35;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    const rotation = galaxyGroup.quaternion;
+    const activeElement = document.activeElement;
+    const state = [
+      width, height, mapZoom, camera.position.x, camera.position.y, camera.position.z,
+      rotation.x, rotation.y, rotation.z, rotation.w, galaxyCatalogRevision, activeGalaxyId,
+      activeSystemView, pendingSystemId, activeSystem, selectedSpecialId, filter, activeElement,
+      systemPointer?.x, systemPointer?.y, labelUnderPointer,
+      ...Array.from(markerOverlays, (element) => element.hidden),
+    ];
+    if (state.length === lastLabelState.length && state.every((value, index) => value === lastLabelState[index])) return;
+    lastLabelState = state;
+
+    const overview = mapZoom < 1.3;
+    const close = mapZoom >= closeGalaxyZoom;
+    const specialFilter = isSpecialFilter(filter?.kind);
+    const planetFilter = filter && !specialFilter;
+    const solarFilter = ["probe", "historic-probe"].includes(filter?.kind);
+    const selectedId = pendingSystemId ?? (specialFilter ? null : activeSystem);
+    const candidates = [];
+    let pointed = null;
+    let pointerDistance = 16 ** 2;
+    let center = null;
+    let centerDistance = (Math.min(width, height) * 0.20) ** 2;
+    let selected = null;
+    let keyboard = null;
+    let pointedLabel = null;
+    if (!activeSystemView) {
+      galaxyGroup.updateMatrixWorld();
+      for (const marker of systemMeshes) {
+        if (!isActiveMarker(marker)) continue;
+        const { id, catalog, filterMatch, batchIndex } = marker.userData;
+        const reference = id === "sol";
+        const visibleInFilter = !filter || filterMatch || (reference && solarFilter);
+        const hasFocus = visibleGalaxyLabels.get(marker) === activeElement;
+        const hasPointer = marker === labelUnderPointer && !specialFilter;
+        const inZoomRange = reference || (!overview && (!catalog || mapZoom >= 3.5));
+        const visibleByDefault = visibleInFilter && (planetFilter || inZoomRange);
+        const drawn = !catalog || batchIndex < catalogBatches.get(activeGalaxyId).points.geometry.drawRange.count;
+        const eligibleTarget = !specialFilter && visibleInFilter && drawn && (systemPointer || close);
+        if (!visibleByDefault && !eligibleTarget && id !== selectedId && !hasFocus && !hasPointer) continue;
+
+        markerWorldPosition(marker, labelProjection).project(camera);
+        if (Math.abs(labelProjection.x) >= 1 || Math.abs(labelProjection.y) >= 1 || Math.abs(labelProjection.z) >= 1) continue;
+        const x = (labelProjection.x + 1) * width / 2;
+        const y = (1 - labelProjection.y) * height / 2;
+        const distance = (x - width / 2) ** 2 + (y - height / 2) ** 2;
+        const distanceToPointer = eligibleTarget && systemPointer
+          ? (x - systemPointer.x) ** 2 + (y - systemPointer.y) ** 2 : Infinity;
+        // A small bias keeps a centered target from flickering between adjacent points.
+        const distanceToCenter = eligibleTarget && close ? distance * (marker === galaxyFocus ? 0.78 : 1) : Infinity;
+        const pointerMatch = distanceToPointer < pointerDistance;
+        const centerMatch = distanceToCenter < centerDistance;
+        if ((close || !visibleByDefault) && id !== selectedId && !hasFocus && !hasPointer && !pointerMatch && !centerMatch) continue;
+        const candidate = { marker, reference, x, y, depth: labelProjection.z, distance };
+        if (!close && visibleByDefault) candidates.push(candidate);
+        if (id === selectedId) selected = candidate;
+        if (hasFocus) keyboard = candidate;
+        if (hasPointer) pointedLabel = candidate;
+        if (pointerMatch) {
+          pointerDistance = distanceToPointer;
+          pointed = candidate;
+        }
+        if (centerMatch) {
+          centerDistance = distanceToCenter;
+          center = candidate;
+        }
+      }
+    }
+
+    const focus = (pendingSystemId && selected) || keyboard || pointedLabel || pointed || selected || center;
+    galaxyFocus = focus?.marker ?? null;
+    hoveredMarker = pointed?.marker ?? null;
+    const limit = close ? 1 : overview && !planetFilter ? 2 : width < 640 ? 4 : 7;
+    const ordered = focus ? [focus] : [];
+    if (limit > 1) {
+      candidates.sort((a, b) => Number(b.reference) - Number(a.reference) || a.distance - b.distance || a.depth - b.depth);
+      ordered.push(...candidates);
+    }
+    const accepted = [];
+    const next = new Set();
+    for (const candidate of ordered) {
+      if (accepted.length >= limit) break;
+      const { marker } = candidate;
+      const focused = marker === galaxyFocus;
+      if (next.has(marker)) continue;
+      if (!focused && focus && Math.hypot(candidate.x - focus.x, candidate.y - focus.y) < 108) continue;
+      const labelWidth = Math.min(focused ? 198 : 170, 14 + marker.userData.text.length * (focused ? 8 : 7), width - 32);
+      const labelHeight = focused ? 26 : 20;
+      const offset = focused ? 16 : 12;
+      const left = candidate.x + labelWidth + offset + 4 <= width
+        ? candidate.x + offset : candidate.x - labelWidth - offset;
+      const top = THREE.MathUtils.clamp(candidate.y - labelHeight / 2, 2, height - labelHeight - 2);
+      if (left < 4 || height < labelHeight) continue;
+      const bounds = { left, right: left + labelWidth, top, bottom: top + labelHeight };
+      if (accepted.some((other) => bounds.left < other.right + 6 && bounds.right > other.left - 6
+          && bounds.top < other.bottom + 4 && bounds.bottom > other.top - 4)) continue;
+      let label = visibleGalaxyLabels.get(marker);
+      if (!label) {
+        label = document.createElement("button");
+        label.type = "button";
+        label.className = "map3d-label map3d-galaxy-label map3d-star-label";
+        label.dataset.systemId = marker.userData.id;
+        const text = document.createElement("span");
+        text.textContent = marker.userData.text;
+        label.appendChild(text);
+        label.title = `${marker.userData.text} · ${marker.userData.title}`;
+        label.addEventListener("pointerenter", () => { labelUnderPointer = marker; });
+        label.addEventListener("pointerleave", () => {
+          if (labelUnderPointer === marker) labelUnderPointer = null;
+        });
+        label.addEventListener("pointerdown", (event) => event.stopPropagation());
+        label.addEventListener("click", (event) => {
+          event.stopPropagation();
+          navigateToSystem(marker.userData.id);
+        });
+        container.appendChild(label);
+        visibleGalaxyLabels.set(marker, label);
+      }
+      label.classList.toggle("map3d-galaxy-label-priority", focused);
+      label.style.left = `${left}px`;
+      label.style.top = `${top}px`;
+      label.style.width = `${labelWidth}px`;
+      label.style.setProperty("--marker-x", `${candidate.x - left}px`);
+      label.style.setProperty("--marker-y", `${candidate.y - top}px`);
+      label.style.setProperty("--system-marker-color", marker.userData.filterMatch && filter ? "#b8f93a" : marker.userData.id === "sol" ? "#ffda87" : "#aeeaff");
+      accepted.push(bounds);
+      next.add(marker);
+    }
+    for (const [marker, label] of visibleGalaxyLabels) {
+      if (next.has(marker)) continue;
+      if (labelUnderPointer === marker) labelUnderPointer = null;
+      label.remove();
+      visibleGalaxyLabels.delete(marker);
+    }
+    layoutSpecialMarkers(filter);
+  }
 
   function resize() {
     const width = Math.max(1, container.clientWidth);
@@ -1201,43 +1421,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       }
     }
-    const occupiedLabelSlots = new Set();
-    for (const mesh of systemMeshes) {
-      const worldPosition = mesh.getWorldPosition(new THREE.Vector3());
-      const projected = worldPosition.project(camera);
-      const cameraDistance = camera.position.distanceTo(mesh.getWorldPosition(new THREE.Vector3()));
-      const zoomFade = 0.58 + 0.42 * THREE.MathUtils.smoothstep(mapZoom, 0.2, 8);
-      const proximityFade = 0.5 + 0.5 * (1 - THREE.MathUtils.smoothstep(cameraDistance, 200, 2400));
-      const labelFilterFade = filterActive && !mesh.userData.filterMatch ? 0.18 : 1;
-      const labelPulse = filterActive && mesh.userData.filterMatch ? 0.78 + pulseWave(mesh.userData.id.length) * 0.22 : 1;
-      const labelFade = zoomFade * proximityFade * labelFilterFade * labelPulse;
-      const screenX = (projected.x * 0.5 + 0.5) * container.clientWidth;
-      const screenY = (-projected.y * 0.5 + 0.5) * container.clientHeight;
-      const labelSlot = `${Math.round(screenX / 110)}:${Math.round(screenY / 28)}`;
-      const inView = projected.z > -1 && projected.z < 1 && Math.abs(projected.x) < 1.08 && Math.abs(projected.y) < 1.08;
-      const visible = mesh.visible && inView && labelFade > 0.02 && !occupiedLabelSlots.has(labelSlot);
-      if (visible) occupiedLabelSlots.add(labelSlot);
-      mesh.userData.labelElement.style.display = visible ? "block" : "none";
-      mesh.userData.labelElement.style.opacity = String(labelFade);
-      mesh.userData.labelElement.style.fontSize = `${8 + THREE.MathUtils.smoothstep(mapZoom, 0.2, 8) * 3}px`;
-      if (visible) {
-        mesh.userData.labelElement.style.left = `${screenX}px`;
-        mesh.userData.labelElement.style.top = `${screenY}px`;
-      }
-    }
     const localZoomFade = THREE.MathUtils.smoothstep(mapZoom, 0.24, 1.15);
     const galaxyCameraDistance = cameraBaseDistance * (3 / Math.max(0.12, mapZoom));
     const markerScale = galaxyCameraDistance / 1725;
     for (const mesh of systemMeshes) {
+      if (!mesh.isMesh || !isActiveMarker(mesh)) continue;
       const distanceFromCamera = camera.position.distanceTo(mesh.getWorldPosition(new THREE.Vector3()));
       const localProximity = 1 - THREE.MathUtils.smoothstep(distanceFromCamera, 90, 520);
       const matched = filterActive && mesh.userData.filterMatch;
       const dimOpacity = filterActive && !mesh.userData.filterMatch ? 0.16 : 1;
       const pulse = matched ? pulseWave(String(mesh.userData.id || "").length) : 0;
       const lodOpacity = (0.14 + 0.86 * localZoomFade * localProximity) * dimOpacity * (matched ? 0.78 + pulse * 0.22 : 1);
-      mesh.visible = mesh.userData.filterVisible;
       mesh.material.opacity = lodOpacity;
-      mesh.material.emissiveIntensity = mesh.userData.hovered ? mesh.userData.starVisuals.emissive * 1.45 : mesh.userData.starVisuals.emissive * (matched ? 1.1 + pulse * 0.9 : dimOpacity);
+      mesh.material.emissiveIntensity = mesh === hoveredMarker ? mesh.userData.starVisuals.emissive * 1.45 : mesh.userData.starVisuals.emissive * (matched ? 1.1 + pulse * 0.9 : dimOpacity);
       for (const decoration of mesh.userData.systemDecorations) {
         decoration.visible = mesh.visible;
         decoration.material.opacity = decoration.userData.baseOpacity * lodOpacity * (matched ? 1 + pulse * 0.55 : 1);
@@ -1245,42 +1441,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         decoration.scale.set(size, size, 1);
       }
     }
-    for (const mesh of specialMeshes) {
-      const worldPosition = mesh.getWorldPosition(new THREE.Vector3());
-      const projected = worldPosition.project(camera);
-      const distanceFromCamera = camera.position.distanceTo(worldPosition);
-      const matched = filterActive && mesh.userData.filterMatch;
-      const pulse = matched ? pulseWave(mesh.userData.objectIndex) : 0;
-      const filterDim = filterActive && !mesh.userData.filterMatch ? 0.14 : 1;
-      mesh.material.opacity = filterDim * (matched ? 0.72 + pulse * 0.28 : 1);
-      for (const decoration of mesh.userData.decorations) {
-        decoration.visible = true;
-        decoration.material.opacity = decoration.userData.baseOpacity * filterDim * (matched ? 0.68 + pulse * 0.62 : 1);
-        if (decoration.userData.baseSize) {
-          const size = decoration.userData.baseSize * markerScale * (matched ? 1 + pulse * 0.28 : 1);
-          decoration.scale.set(size, size, 1);
-        }
-        if (decoration.userData.specialObject) decoration.scale.setScalar(matched ? 0.9 + pulse * 0.45 : 1);
-      }
-      const proximityFade = 0.52 + 0.48 * (1 - THREE.MathUtils.smoothstep(distanceFromCamera, 220, 2600));
-      const labelFilterFade = filterActive && !mesh.userData.filterMatch ? 0.15 : 1;
-      const visible = projected.z > -1 && projected.z < 1 && Math.abs(projected.x) < 1.08 && Math.abs(projected.y) < 1.08 && !occupiedLabelSlots.has(`${Math.round(((projected.x * 0.5 + 0.5) * container.clientWidth) / 110)}:${Math.round(((-projected.y * 0.5 + 0.5) * container.clientHeight) / 28)}`);
-      const labelFade = proximityFade * labelFilterFade * (matched ? 0.78 + pulse * 0.22 : 1);
-      mesh.userData.labelElement.style.display = visible ? "block" : "none";
-      mesh.userData.labelElement.style.opacity = String(labelFade);
-      mesh.userData.labelElement.style.fontSize = `${8 + THREE.MathUtils.smoothstep(mapZoom, 0.2, 8) * 3}px`;
-      if (visible) {
-        const screenX = (projected.x * 0.5 + 0.5) * container.clientWidth;
-        const screenY = (-projected.y * 0.5 + 0.5) * container.clientHeight;
-        mesh.userData.labelElement.style.left = `${screenX}px`;
-        mesh.userData.labelElement.style.top = `${screenY}px`;
-        occupiedLabelSlots.add(`${Math.round(screenX / 110)}:${Math.round(screenY / 28)}`);
-      }
+    const batch = catalogBatches.get(activeGalaxyId);
+    if (batch) {
+      const specialFilter = isSpecialFilter(currentFilter?.kind);
+      const cap = filterActive && !specialFilter ? batch.markers.length : mapZoom < 1.3 ? 85 : mapZoom < 3 ? 850 : batch.markers.length;
+      batch.points.geometry.setDrawRange(0, cap);
+      batch.points.material.size = mapZoom < 1.3 ? 4.5 : 5.5;
+      batch.points.material.opacity = specialFilter ? 0.22 : mapZoom >= closeGalaxyZoom && galaxyFocus ? 0.29 : mapZoom < 1.3 ? 0.63 : 0.82;
     }
+    layoutGalaxyLabels(mapZoom, currentFilter);
     const macroFade = activeSystemView ? 0 : 1 - THREE.MathUtils.smoothstep(typeof zoom === "number" ? zoom : 3, 0.35, 1.35);
-    macroGalaxy.material.opacity += (macroFade * 0.58 - macroGalaxy.material.opacity) * 0.035;
+    macroGalaxy.material.opacity += (macroFade * 0.73 - macroGalaxy.material.opacity) * 0.08;
     macroGalaxy.visible = macroGalaxy.material.opacity > 0.015;
-    starfield.material.opacity = 0.34 - macroGalaxy.material.opacity * 0.12;
+    starfield.material.opacity = (mapZoom < 1.3 ? 0.21 : 0.11) - macroGalaxy.material.opacity * 0.07;
     renderer.render(scene, camera);
   }
   render();
@@ -1296,19 +1469,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     macroGalaxy.material.dispose();
     starfield.material.dispose();
     glowTexture.dispose();
+    markerTexture.dispose();
     container.querySelectorAll(".map3d-label").forEach((label) => label.remove());
     viewControls.remove();
-    systemMeshes.forEach((mesh) => {
-      mesh.geometry.dispose();
-      mesh.material.dispose();
-    });
-    specialMeshes.forEach((mesh) => {
-      mesh.geometry.dispose();
-      mesh.material.dispose();
-    });
-    specialDecorations.forEach((object) => {
-      object.geometry.dispose();
-      object.material.dispose();
-    });
+    disposeGalaxySystems();
+    for (const { userData } of specialMeshes) {
+      userData.badge.remove();
+      userData.leader.remove();
+    }
   }, { once: true });
 });

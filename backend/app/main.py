@@ -1,10 +1,23 @@
-from fastapi import FastAPI
+import json
+from pathlib import Path
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
+from requests import RequestException
 from app.models.schemas import QueryRequest, QueryResponse
+from app.services.earth_imagery import PROVIDERS, ImageryUnavailable, fetch_earth_image, fill_earth_gaps
 from app.services.ollama_service import ollama_service
 from app.database.chroma_db import chroma_manager
 
 app = FastAPI(title="SpaceFree Backend")
+CACHE_DIR = Path(__file__).resolve().parents[2] / ".cache"
+EARTH_BASEMAP_PATH = CACHE_DIR.parent / "earth-blue-marble.jpg"
+EARTH_BASEMAP_SOURCE = "NASA Blue Marble Next Generation"
+ORBITAL_CACHE_FILES = {
+    "stations": ["celestrak-stations.json"],
+    "visual": ["celestrak-visual.json"],
+    "active": ["celestrak-active.json"],
+    "debris": ["celestrak-fengyun-1c-debris.json", "celestrak-cosmos-2251-debris.json", "celestrak-iridium-33-debris.json"],
+}
 
 # Enable CORS for local development
 app.add_middleware(
@@ -13,11 +26,152 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[
+        "X-Data-Source", "X-Image-Date", "X-Image-Period", "X-Texture-Source",
+        "X-Texture-Fallback", "X-Fallback-Reason", "X-Texture-Background", "X-Image-Coverage",
+        "X-Texture-Status", "X-Texture-Reason", "X-Requested-Provider", "X-Upstream-Status",
+    ],
 )
 
 @app.get("/")
 async def root():
     return {"message": "SpaceFree Backend is running"}
+
+
+@app.get("/api/status")
+def api_status(response: Response):
+    headers = {"Cache-Control": "no-store"}
+    try:
+        configured = ollama_service.model_available()
+    except (RequestException, ValueError) as error:
+        raise HTTPException(status_code=503, detail="Stato Ollama non disponibile", headers=headers) from error
+    response.headers.update(headers)
+    return {"provider": "ollama", "configured": configured, "model": ollama_service.model}
+
+
+@app.get("/api/orbital-objects")
+async def orbital_objects(group: str = Query("active"), limit: int = Query(12000, ge=1, le=12000)):
+    files = ORBITAL_CACHE_FILES.get(group.lower())
+    if not files:
+        raise HTTPException(status_code=400, detail="Gruppo orbitale non valido")
+    objects = {}
+    updated = []
+    for filename in files:
+        try:
+            payload = json.loads((CACHE_DIR / filename).read_text(encoding="utf-8"))
+            rows = payload.get("data", payload.get("objects", []))
+            for row in rows if isinstance(rows, list) else []:
+                catalog_id = row.get("NORAD_CAT_ID") or row.get("OBJECT_ID") or row.get("OBJECT_NAME")
+                if catalog_id is not None:
+                    objects[str(catalog_id)] = row
+            if payload.get("fetchedAt"):
+                updated.append(payload["fetchedAt"])
+        except (OSError, json.JSONDecodeError):
+            continue
+    if not objects:
+        raise HTTPException(status_code=503, detail="Cache CelesTrak non disponibile; aggiorna l'ingestione")
+    updated_at = max(updated, default=None)
+    fetched_seconds = float(updated_at or 0) / (1000 if float(updated_at or 0) > 10_000_000_000 else 1)
+    age_seconds = max(0, __import__("time").time() - fetched_seconds)
+    return {"group": group, "objects": list(objects.values())[:limit], "total": len(objects), "updatedAt": updated_at, "stale": age_seconds > 7200, "source": "CelesTrak cache locale"}
+
+@app.get("/api/orbital-positions")
+async def orbital_positions(group: str = Query("active"), limit: int = Query(12000, ge=1, le=12000)):
+    try:
+        from sgp4 import omm
+        from sgp4.api import Satrec, jday
+    except ImportError as error:
+        raise HTTPException(status_code=503, detail="Dipendenza SGP4 assente: installa backend/requirements.txt") from error
+    catalog = await orbital_objects(group, limit)
+    now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+    jd, fraction = jday(now.year, now.month, now.day, now.hour, now.minute, now.second + now.microsecond / 1e6)
+    positions = []
+    for obj in catalog["objects"]:
+        try:
+            satellite = Satrec()
+            omm.initialize(satellite, obj)
+            error_code, position, _velocity = satellite.sgp4(jd, fraction)
+            if error_code == 0 and all(value == value and abs(value) < 1e8 for value in position):
+                positions.append({"object": obj, "positionKm": position})
+        except (KeyError, TypeError, ValueError):
+            continue
+    if not positions:
+        raise HTTPException(status_code=502, detail="Nessun elemento OMM valido per la propagazione SGP4")
+    return {**catalog, "positions": positions, "propagatedAt": now.isoformat(), "propagator": "python-sgp4 / WGS72"}
+
+@app.get("/api/exoplanets")
+async def exoplanets():
+    try:
+        payload = json.loads((CACHE_DIR / "nasa-exoplanets.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        raise HTTPException(status_code=503, detail="Cache NASA Exoplanet Archive non disponibile")
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), (list, dict)):
+        raise HTTPException(status_code=503, detail="Cache NASA Exoplanet Archive non valida")
+    return {"records": payload["data"], "updatedAt": payload.get("fetchedAt"), "source": "NASA Exoplanet Archive cache locale"}
+
+def earth_image_response(year: int | None = None, provider: str = "nasa", fill_gaps: bool = False):
+    headers = {"X-Requested-Provider": provider if provider in PROVIDERS else "unknown"}
+    try:
+        image = fetch_earth_image(year, provider)
+    except ImageryUnavailable as error:
+        headers.update({
+            "Cache-Control": "no-store",
+            "X-Texture-Status": "unavailable",
+            "X-Texture-Reason": error.reason,
+        })
+        if error.upstream_status is not None:
+            headers["X-Upstream-Status"] = str(error.upstream_status)
+        if not error.offline:
+            raise HTTPException(status_code=error.status, detail=str(error), headers=headers) from error
+        try:
+            fallback = EARTH_BASEMAP_PATH.read_bytes()
+        except OSError as fallback_error:
+            raise HTTPException(
+                status_code=error.status, detail=f"{error} Anche la Blue Marble locale non è disponibile.",
+                headers=headers,
+            ) from fallback_error
+        headers.update({
+            "X-Texture-Status": "fallback",
+            "X-Texture-Fallback": "true",
+            "X-Texture-Source": EARTH_BASEMAP_SOURCE,
+            "X-Fallback-Reason": (
+                "Timeout della fonte selezionata." if error.reason == "upstream-timeout"
+                else "Connessione alla fonte selezionata non disponibile."
+            ),
+        })
+        return Response(fallback, media_type="image/jpeg", headers=headers)
+
+    headers.update({
+        "Cache-Control": "public, max-age=86400" if year is not None else "public, max-age=604800",
+        "X-Data-Source": image.source,
+        "X-Texture-Source": image.source,
+        "X-Texture-Status": "coverage-unknown",
+    })
+    if image.coverage is not None:
+        headers["X-Image-Coverage"] = f"{image.coverage:.6f}".rstrip("0").rstrip(".")
+        headers["X-Texture-Status"] = "partial" if image.coverage < 100 else "real"
+    if image.date:
+        headers["X-Image-Date"] = image.date
+    if image.period:
+        headers["X-Image-Period"] = image.period
+    content = image.content
+    if fill_gaps and (filled := fill_earth_gaps(image, EARTH_BASEMAP_PATH)):
+        content = filled
+        headers["X-Texture-Background"] = EARTH_BASEMAP_SOURCE
+    return Response(content, media_type="image/png", headers=headers)
+
+
+@app.get("/api/earth/texture/{year}")
+def earth_texture(year: int, provider: str = "nasa", fill_gaps: bool = False):
+    if not 2000 <= year <= 2026:
+        raise HTTPException(status_code=400, detail="Anno fuori dall'intervallo 2000?2026")
+    return earth_image_response(year, provider, fill_gaps)
+
+
+@app.get("/api/earth/basemap")
+def earth_basemap(provider: str = "nasa", fill_gaps: bool = False):
+    return earth_image_response(provider=provider, fill_gaps=fill_gaps)
+
 
 @app.post("/query", response_model=QueryResponse)
 async def query(request: QueryRequest):

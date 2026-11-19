@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const path = require("node:path");
 const fs = require("node:fs/promises");
+const buildExoplanetSystems = require("./exoplanet-catalog.js");
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -19,8 +20,12 @@ const ALLOWED_FILES = new Set([
   "style.css",
   "features.css",
   "main.js",
+  "exoplanet-catalog.js",
   "map3d.js",
   "earth-orbit.js",
+  "earth-test.html",
+  "earth-blue-marble.jpg",
+  "node_modules/three/build/three.min.js",
   "favicon.svg",
   "data.jpg",
   "startrek.png",
@@ -87,19 +92,6 @@ async function getCachedExternalJson(key, url, ttlMs) {
   return request;
 }
 
-function rowsFromTap(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.data) && Array.isArray(payload?.metadata)) {
-    const columns = payload.metadata.map((item) => String(item.name).toLowerCase());
-    return payload.data.map((values) => Object.fromEntries(columns.map((column, index) => [column, values[index]])));
-  }
-  return [];
-}
-
-function safeCatalogText(value, max = 180) {
-  return String(value ?? "").replace(/[<>"'&\u0000-\u001f]/g, "").slice(0, max);
-}
-
 app.disable("x-powered-by");
 app.use(
   cors({
@@ -130,6 +122,7 @@ Inizia dalla risposta concreta. Mantieni normalmente la risposta in tre-sei fras
 
 app.get("/api/status", (_req, res) => {
   res.set("Cache-Control", "no-store").json({
+    provider: "openrouter",
     configured: Boolean(process.env.OPENROUTER_API_KEY),
     model: PRIMARY_MODEL,
     fallbackModel: FALLBACK_MODEL,
@@ -143,50 +136,7 @@ app.get("/api/exoplanets", async (_req, res) => {
   url.searchParams.set("format", "json");
   try {
     const cached = await getCachedExternalJson("nasa-exoplanets", url, 12 * 60 * 60 * 1000);
-    const grouped = new Map();
-    for (const row of rowsFromTap(cached.data)) {
-      const hostname = safeCatalogText(row.hostname, 80).trim();
-      const planetName = safeCatalogText(row.pl_name, 90).trim();
-      if (!hostname || !planetName) continue;
-      if (!grouped.has(hostname)) grouped.set(hostname, { hostname, planets: [], row });
-      const radius = Number(row.pl_rade);
-      const mass = Number(row.pl_bmasse);
-      const semiMajor = Number(row.pl_orbsmax);
-      const period = Number(row.pl_orbper);
-      const type = Number.isFinite(radius)
-        ? radius < 1.6 ? "Esopianeta roccioso" : radius < 4 ? "Esopianeta · super-Terra" : radius < 8 ? "Esopianeta ghiacciato" : "Esopianeta gigante gassoso"
-        : "Esopianeta confermato";
-      const color = type.includes("roccioso") ? "#c99a72" : type.includes("gassoso") ? "#d9b078" : type.includes("ghiacciato") ? "#87c6d4" : "#ad9ee3";
-      grouped.get(hostname).planets.push({
-        name: planetName,
-        color,
-        type,
-        diameter: [Number.isFinite(radius) ? `${radius.toFixed(2)} R⊕` : "", Number.isFinite(mass) ? `${mass.toFixed(2)} M⊕` : ""].filter(Boolean).join(" · ") || "Non misurati",
-        year: Number.isFinite(period) ? `${period.toFixed(2)} giorni` : "Non noto",
-        distance: Number.isFinite(semiMajor) ? `${semiMajor.toPrecision(3)} UA` : "Orbita non determinata",
-        description: "Esopianeta confermato. Parametri osservativi dal NASA Exoplanet Archive; i valori non pubblicati restano indicati come non noti.",
-      });
-    }
-    const systems = [...grouped.values()].map(({ hostname, planets, row }, index) => {
-      const slug = hostname.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 64) || `system-${index + 1}`;
-      const distance = Number(row.sy_dist);
-      const lightYears = Number.isFinite(distance) ? (distance * 3.26156).toFixed(2) : "n.d.";
-      const ra = row.ra == null || row.ra === "" ? null : Number(row.ra);
-      const dec = row.dec == null || row.dec === "" ? null : Number(row.dec);
-      return {
-        id: `exo-${slug}`,
-        shortName: hostname,
-        name: `${hostname}<span>.</span>`,
-        description: `Sistema extrasolare con ${planets.length} pianet${planets.length === 1 ? "a confermato" : "i confermati"}, catalogato dal NASA Exoplanet Archive. Le orbite mostrate sono schematiche.`,
-        distance: lightYears,
-        ra: Number.isFinite(ra) ? ra : null,
-        dec: Number.isFinite(dec) ? dec : null,
-        star: safeCatalogText(row.st_spectype || "Stella catalogata", 40),
-        starType: "catalogata",
-        count: String(planets.length).padStart(2, "0"),
-        planets,
-      };
-    });
+    const systems = buildExoplanetSystems(cached.data);
     res.set("Cache-Control", "public, max-age=3600").json({ systems, source: "NASA Exoplanet Archive", updatedAt: new Date(cached.fetchedAt).toISOString(), stale: cached.stale });
   } catch (error) {
     console.error("Catalogo NASA non disponibile:", error.message);

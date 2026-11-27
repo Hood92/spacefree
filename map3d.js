@@ -394,8 +394,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderer.domElement.addEventListener("pointerdown", (event) => {
     if (event.pointerType === "touch") {
       if (mapOrbitToggle?.getAttribute("aria-pressed") !== "true") return;
-      event.preventDefault();
       event.stopPropagation();
+      if (touchPointers.size === 0) suppressMapClick = false;
       touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
       renderer.domElement.setPointerCapture(event.pointerId);
       mapRotationPointer = null;
@@ -419,7 +419,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           worldY: originY + (centerY - originY - (typeof panY === "number" ? panY : 0)) / Math.max(0.12, typeof zoom === "number" ? zoom : 0.2),
         };
       } else {
-        touchGesture = { mode: "rotate", id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+        touchGesture = { mode: "rotate", id: event.pointerId, x: event.clientX, y: event.clientY, moved: false, startX: event.clientX, startY: event.clientY };
       }
       return;
     }
@@ -457,7 +457,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else if (touchGesture?.mode === "rotate" && touchGesture.id === event.pointerId) {
         const dx = event.clientX - touchGesture.x;
         const dy = event.clientY - touchGesture.y;
-        if (Math.hypot(dx, dy) > 3) touchGesture.moved = true;
+        if (Math.hypot(event.clientX - touchGesture.startX, event.clientY - touchGesture.startY) > 9) touchGesture.moved = true;
         if (touchGesture.moved) {
           const rotationTarget = activeSystemView ? systemGroup : galaxyGroup;
           rotationTarget.rotation.y += dx * 0.005;
@@ -496,9 +496,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       touchPointers.delete(event.pointerId);
       if (touchPointers.size === 1) {
         const [remainingId, point] = [...touchPointers.entries()][0];
-        touchGesture = { mode: "rotate", id: remainingId, x: point.x, y: point.y, moved: wasPinching };
+        touchGesture = { mode: "rotate", id: remainingId, x: point.x, y: point.y, moved: wasPinching, startX: point.x, startY: point.y };
       } else if (touchPointers.size === 0) {
-        suppressMapClick = Boolean(touchGesture?.moved || wasPinching);
+        suppressMapClick = event.type !== "pointercancel" && Boolean(touchGesture?.moved || wasPinching);
         touchGesture = null;
       }
       return;
@@ -508,7 +508,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
     if (!mapRotationPointer || mapRotationPointer.id !== event.pointerId) return;
-    suppressMapClick = mapRotationPointer.moved;
+    suppressMapClick = event.type !== "pointercancel" && mapRotationPointer.moved;
     mapRotationPointer = null;
   };
   renderer.domElement.addEventListener("pointerup", endMapRotation);
@@ -831,18 +831,42 @@ document.addEventListener("DOMContentLoaded", async () => {
       const planetMaps = createPlanetMaterial(planet, index, id);
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 48, 32), planetMaps.material);
       const phase = index * 2.399;
-      mesh.position.set(Math.cos(phase) * orbitRadius, Math.sin(phase) * orbitRadius, 0);
-      mesh.userData = { orbitRadius, phase, speed: 0.42 / Math.sqrt(orbitRadius), planet, systemId: id };
-      systemGroup.add(mesh);
+      const orbitGroup = new THREE.Group();
+      orbitGroup.position.set(Math.cos(phase) * orbitRadius, Math.sin(phase) * orbitRadius, 0);
+      const spinAxisGroup = new THREE.Group();
+      const orbitalNormal = new THREE.Vector3(0, 0, 1);
+      const localNorth = new THREE.Vector3(0, 1, 0);
+      const alignPole = new THREE.Quaternion().setFromUnitVectors(localNorth, orbitalNormal);
+      const hasCataloguedAxialTilt = typeof planet.axialTiltDeg === "number" && Number.isFinite(planet.axialTiltDeg);
+      const axialTiltDeg = hasCataloguedAxialTilt ? planet.axialTiltDeg : 0;
+      if (axialTiltDeg !== 0) {
+        const tilt = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), THREE.MathUtils.degToRad(axialTiltDeg));
+        alignPole.premultiply(tilt);
+      }
+      spinAxisGroup.quaternion.copy(alignPole);
+      orbitGroup.add(spinAxisGroup);
+      spinAxisGroup.add(mesh);
+      mesh.userData = { orbitRadius, phase, speed: 0.42 / Math.sqrt(orbitRadius), spinSpeed: 0.12, planet, systemId: id };
+      const poleAxis = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -radius * 1.28, 0), new THREE.Vector3(0, radius * 1.28, 0)]),
+        new THREE.LineBasicMaterial({ color: 0xd8efff, transparent: true, opacity: 0.72, depthWrite: false })
+      );
+      spinAxisGroup.add(poleAxis);
+      const northPole = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.16, radius * 0.085), 12, 8), new THREE.MeshBasicMaterial({ color: 0x7df9ff }));
+      const southPole = northPole.clone();
+      northPole.position.y = radius * 1.34;
+      southPole.position.y = -radius * 1.34;
+      spinAxisGroup.add(northPole, southPole);
+      systemGroup.add(orbitGroup);
       const hitMesh = new THREE.Mesh(
         new THREE.SphereGeometry(1, 16, 12),
         new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, colorWrite: false, depthWrite: false })
       );
-      hitMesh.position.copy(mesh.position);
+      hitMesh.position.copy(orbitGroup.position);
       hitMesh.scale.setScalar(Math.max(radius * 1.45, 2.2));
       hitMesh.userData.planetHitTarget = true;
       systemGroup.add(hitMesh);
-      systemBodies.push({ mesh, hitMesh, planet, systemId: id, maps: planetMaps.maps });
+      systemBodies.push({ mesh, orbitGroup, spinAxisGroup, hitMesh, planet, systemId: id, axialTiltDeg, maps: planetMaps.maps });
       if (/terra|earth/i.test(planet.name)) {
         const cloudLayer = new THREE.Mesh(
           new THREE.SphereGeometry(radius * 1.012, 40, 28),
@@ -857,6 +881,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       const label = document.createElement("span");
       label.className = "map3d-label map3d-body-label";
       label.textContent = planet.name;
+      label.title = hasCataloguedAxialTilt
+        ? `Obliquità catalogata: ${axialTiltDeg}°`
+        : "Asse polare neutro rispetto al piano orbitale; obliquità non catalogata.";
       container.appendChild(label);
       systemBodies[systemBodies.length - 1].label = label;
       label.tabIndex = 0;
@@ -988,12 +1015,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function findSystemHit(event) {
     const directHit = raycaster.intersectObjects(systemMeshes.filter((marker) => marker.isMesh && isActiveMarker(marker)), false)[0]?.object;
-    if (directHit) return directHit;
     const rect = renderer.domElement.getBoundingClientRect();
     const pointerX = event.clientX - rect.left;
     const pointerY = event.clientY - rect.top;
     let closest = null;
-    let closestDistanceSquared = 15 * 15;
+    const isTouch = event.pointerType === "touch" || window.matchMedia("(pointer: coarse)").matches;
+    const pickRadius = isTouch ? 42 : event.pointerType === "pen" ? 28 : 16;
+    let closestDistanceSquared = pickRadius * pickRadius;
     let closestDepth = Infinity;
     for (const mesh of systemMeshes) {
       if (!isActiveMarker(mesh)) continue;
@@ -1011,7 +1039,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         closestDepth = depth;
       }
     }
-    return closest;
+    // La posizione sullo schermo decide tra marcatori vicini: il raycast può
+    // colpire la stella sovrapposta (spesso Sol) anche quando il dito è più
+    // vicino a un altro sistema.
+    return closest || directHit;
   }
   renderer.domElement.addEventListener("click", (event) => {
     if (suppressMapClick) {
@@ -1187,6 +1218,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     nextLabelLayout = now + 35;
     const width = container.clientWidth;
     const height = container.clientHeight;
+    const containerRect = container.getBoundingClientRect();
     const rotation = galaxyGroup.quaternion;
     const activeElement = document.activeElement;
     const state = [
@@ -1266,6 +1298,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       ordered.push(...candidates);
     }
     const accepted = [];
+    const reserved = width < 640
+      ? [".map-controls", ".map-class-filters", ".map-filter-notice", ".filter-summary-panel", ".map3d-system-controls"]
+        .flatMap((selector) => [...document.querySelectorAll(selector)])
+        .filter((element) => !element.hidden && getComputedStyle(element).display !== "none")
+        .map((element) => {
+          const rect = element.getBoundingClientRect();
+          return { left: rect.left - containerRect.left, right: rect.right - containerRect.left, top: rect.top - containerRect.top, bottom: rect.bottom - containerRect.top };
+        })
+      : [];
     const next = new Set();
     for (const candidate of ordered) {
       if (accepted.length >= limit) break;
@@ -1273,16 +1314,26 @@ document.addEventListener("DOMContentLoaded", async () => {
       const focused = marker === galaxyFocus;
       if (next.has(marker)) continue;
       if (!focused && focus && Math.hypot(candidate.x - focus.x, candidate.y - focus.y) < 108) continue;
-      const labelWidth = Math.min(focused ? 198 : 170, 14 + marker.userData.text.length * (focused ? 8 : 7), width - 32);
-      const labelHeight = focused ? 26 : 20;
-      const offset = focused ? 16 : 12;
-      const left = candidate.x + labelWidth + offset + 4 <= width
-        ? candidate.x + offset : candidate.x - labelWidth - offset;
-      const top = THREE.MathUtils.clamp(candidate.y - labelHeight / 2, 2, height - labelHeight - 2);
-      if (left < 4 || height < labelHeight) continue;
-      const bounds = { left, right: left + labelWidth, top, bottom: top + labelHeight };
-      if (accepted.some((other) => bounds.left < other.right + 6 && bounds.right > other.left - 6
-          && bounds.top < other.bottom + 4 && bounds.bottom > other.top - 4)) continue;
+      const compact = width < 640;
+      const labelWidth = Math.min(focused ? (compact ? 220 : 198) : (compact ? 188 : 170), 14 + marker.userData.text.length * (focused ? (compact ? 8.8 : 8) : (compact ? 8 : 7)), width - 32);
+      const labelHeight = focused ? (compact ? 34 : 26) : (compact ? 28 : 20);
+      const offset = focused ? 18 : 14;
+      const verticalCenter = THREE.MathUtils.clamp(candidate.y - labelHeight / 2, 2, height - labelHeight - 2);
+      const placements = [
+        { left: candidate.x + offset, top: verticalCenter },
+        { left: candidate.x - labelWidth - offset, top: verticalCenter },
+        { left: candidate.x - labelWidth / 2, top: candidate.y - labelHeight - offset },
+        { left: candidate.x - labelWidth / 2, top: candidate.y + offset },
+      ];
+      const boundsFor = ({ left, top }) => ({ left, right: left + labelWidth, top, bottom: top + labelHeight });
+      const collides = (bounds, other) => bounds.left < other.right + 6 && bounds.right > other.left - 6
+        && bounds.top < other.bottom + 4 && bounds.bottom > other.top - 4;
+      const bounds = placements.map(boundsFor).find((item) => item.left >= 4 && item.right <= width - 4
+        && item.top >= 2 && item.bottom <= height - 2
+        && !accepted.some((other) => collides(item, other))
+        && !reserved.some((other) => collides(item, other)));
+      if (!bounds) continue;
+      const { left, top } = bounds;
       let label = visibleGalaxyLabels.get(marker);
       if (!label) {
         label = document.createElement("button");
@@ -1397,9 +1448,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     for (const body of systemBodies) {
       if (body.mesh.userData.orbitRadius) {
         const angle = body.mesh.userData.phase + time * body.mesh.userData.speed;
-        body.mesh.position.x = Math.cos(angle) * body.mesh.userData.orbitRadius;
-        body.mesh.position.y = Math.sin(angle) * body.mesh.userData.orbitRadius;
-        if (body.hitMesh) body.hitMesh.position.copy(body.mesh.position);
+        body.orbitGroup.position.set(
+          Math.cos(angle) * body.mesh.userData.orbitRadius,
+          Math.sin(angle) * body.mesh.userData.orbitRadius,
+          0
+        );
+        body.mesh.rotation.y += body.mesh.userData.spinSpeed;
+        if (body.hitMesh) body.hitMesh.position.copy(body.orbitGroup.position);
       }
       if (body.planet) {
         const bodyFilterable = filterActive && !["probe", "historic-probe", "blackhole"].includes(currentFilter.kind);

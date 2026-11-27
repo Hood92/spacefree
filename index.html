@@ -218,9 +218,9 @@
           <div>
             <span class="earth-orbit-kicker">ATLANTE ORBITALE · DATI CATALOGATI</span>
             <h2 id="earthOrbitTitle">La Terra <span>in orbita.</span></h2>
-            <p>Satelliti e detriti tracciabili attorno al nostro pianeta, con posizioni propagate dagli elementi orbitali più recenti.</p>
+            <p>Satelliti e detriti tracciabili attorno al pianeta, con posizioni propagate dagli elementi catalogati; fonte, epoca e stato di aggiornamento sono indicati qui sotto.</p>
           </div>
-          <div class="earth-orbit-source"><span id="earthCatalogStatus">CelesTrak: in attesa dei dati</span><br>ELEMENTI ORBITALI AGGIORNATI SECONDO IL CATALOGO<br><a href="https://celestrak.org/" target="_blank" rel="noopener noreferrer">FONTE: CELESTRAK ↗</a></div>
+          <div class="earth-orbit-source"><span id="earthCatalogStatus">CelesTrak: in attesa dei dati</span><br>FONTE DEGLI ELEMENTI ORBITALI<br><a href="https://celestrak.org/" target="_blank" rel="noopener noreferrer">CELESTRAK ↗</a></div>
         </header>
         <div class="earth-orbit-filters" role="group" aria-label="Categoria di oggetti in orbita">
           <button type="button" data-orbit-group="stations" aria-pressed="false">Stazioni</button>
@@ -233,12 +233,12 @@
           <input id="earthYearSlider" type="range" min="2000" max="2026" step="1" value="2026">
           <span id="earthYearStatus" role="status">In attesa dell'immagine satellitare.</span>
           <span>Metriche climatiche storiche non disponibili.</span>
-          <a class="earth-test-link" href="earth-test.html">Test del globo con texture locale</a>
+          <a class="earth-test-link" href="earth-test.html">Apri confronto: Blue Marble locale (test)</a>
         </div>
         <div class="earth-orbit-layout">
           <div class="earth-orbit-stage" id="earth-orbit-stage">
             <div id="earth-orbit-canvas" aria-label="Globo 3D con satelliti in orbita"></div>
-            <div class="earth-orbit-hud"><strong id="earth-object-count">In attesa dei dati orbitali…</strong><span id="earth-orbit-status">Le posizioni saranno calcolate all'apertura della sezione.</span><button id="earth-orbit-retry" type="button" hidden>Riprova a caricare</button></div>
+            <div class="earth-orbit-hud"><strong id="earth-object-count">In attesa dei dati orbitali…</strong><span id="earth-orbit-status">Le posizioni saranno calcolate all'apertura della sezione.</span><button id="earth-orbit-retry" type="button" hidden>Aggiorna dati</button></div>
             <div class="earth-orbit-help">TRASCINA PER RUOTARE · ROTELLA PER ZOOM · CLICCA UN OGGETTO</div>
           </div>
           <aside class="earth-object-panel" aria-live="polite">

@@ -258,10 +258,11 @@
   position: absolute;
   top: 9px;
   left: 11px;
+  max-width: calc(100% - 22px);
   z-index: 1;
   color: #819ca6;
-  font: 8px var(--mono);
-  letter-spacing: 1px;
+  font: 7px/1.45 var(--mono);
+  letter-spacing: 0.55px;
 }
 .planet-canvas {
   display: block;

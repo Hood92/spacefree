@@ -1981,6 +1981,18 @@ body {
   .map-controls .map-orbit-toggle {
     display: grid;
   }
+  .map3d-galaxy-label {
+    height: 28px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    background: rgba(5, 20, 31, 0.76);
+    font-size: 12px;
+  }
+  .map3d-galaxy-label-priority {
+    height: 34px;
+    padding: 3px 7px;
+    font-size: 14px;
+  }
   .map3d-system-controls {
     top: 12px;
     left: 12px;

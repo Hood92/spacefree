@@ -228,6 +228,14 @@
           <button type="button" data-orbit-group="active" aria-pressed="true">Attivi</button>
           <button type="button" data-orbit-group="debris" aria-pressed="false">Detriti catalogati</button>
         </div>
+        <div class="earth-simulation-controls" aria-label="Controlli tempo di simulazione">
+          <span class="earth-orbit-kicker">OROLOGIO DI SIMULAZIONE UTC</span>
+          <time id="earth-simulation-clock">In attesa dei dati SGP4</time>
+          <button id="earth-simulation-toggle" type="button" aria-pressed="true">PAUSA</button>
+          <label for="earth-simulation-speed">VELOCITÀ</label>
+          <select id="earth-simulation-speed"><option value="1" selected>1× tempo reale</option><option value="5">5×</option><option value="20">20×</option></select>
+          <span id="earth-simulation-status" role="status">L'orologio segue UTC; le coordinate vengono aggiornate senza richieste per frame.</span>
+        </div>
         <div class="earth-history-control">
           <label for="earthYearSlider">ANNO IMMAGINE SATELLITARE <output id="earthYearValue">2026</output></label>
           <input id="earthYearSlider" type="range" min="2000" max="2026" step="1" value="2026">
@@ -241,7 +249,7 @@
             <div class="earth-orbit-hud"><strong id="earth-object-count">In attesa dei dati orbitali…</strong><span id="earth-orbit-status">Le posizioni saranno calcolate all'apertura della sezione.</span><button id="earth-orbit-retry" type="button" hidden>Aggiorna dati</button></div>
             <div class="earth-orbit-help">TRASCINA PER RUOTARE · ROTELLA PER ZOOM · CLICCA UN OGGETTO</div>
           </div>
-          <aside class="earth-object-panel" aria-live="polite">
+          <aside class="earth-object-panel" id="earth-object-panel" aria-live="polite">
             <span class="earth-orbit-kicker">OGGETTO SELEZIONATO</span>
             <h3 id="earth-object-name">Nessun satellite selezionato</h3>
             <dl>
@@ -250,10 +258,77 @@
               <div><dt>PERIODO ORBITALE</dt><dd id="earth-object-period">—</dd></div>
               <div><dt>EPOCA ELEMENTI</dt><dd id="earth-object-epoch">—</dd></div>
             </dl>
+            <section class="earth-object-kinematics" aria-labelledby="earth-object-kinematics-title">
+              <h4 id="earth-object-kinematics-title">Stato propagato · SGP4</h4>
+              <p id="earth-object-kinematics-status">Seleziona un oggetto propagabile per mostrare posizione e velocità stimate.</p>
+              <dl>
+                <div><dt>QUOTA GEODETICA</dt><dd id="earth-state-altitude">n.d.</dd></div>
+                <div><dt>VELOCITÀ</dt><dd id="earth-state-speed">n.d.</dd></div>
+                <div><dt>LATITUDINE</dt><dd id="earth-state-latitude">n.d.</dd></div>
+                <div><dt>LONGITUDINE</dt><dd id="earth-state-longitude">n.d.</dd></div>
+                <div><dt>ISTANTE PROPAGATO</dt><dd id="earth-state-time">n.d.</dd></div>
+              </dl>
+            </section>
+            <section class="earth-object-telemetry" aria-labelledby="earth-object-telemetry-title">
+              <h4 id="earth-object-telemetry-title">Telemetria / osservazioni reali</h4>
+              <p id="earth-object-telemetry-status">Nessuna fonte di telemetria o osservazioni è integrata per questo oggetto. La propagazione SGP4 non è telemetria di bordo.</p>
+            </section>
             <p id="earth-object-note">I punti rappresentano gli oggetti presenti nel gruppo scelto; selezionane uno sul globo per consultarne i dati.</p>
-            <small>La posizione è una propagazione SGP4 degli elementi orbitali, non telemetria in tempo reale.</small>
+            <small>Gli stati sono ricalcolati con SGP4 dagli elementi TLE/OMM e raccordati tra campioni con interpolazione cubica Hermite. Non sono telemetria di bordo.</small>
+            <section class="earth-object-details" aria-labelledby="earth-object-details-title" aria-live="polite">
+              <h4 id="earth-object-details-title">Dettagli catalogati</h4>
+              <p id="earth-object-details-status">Seleziona un oggetto per cercare dettagli verificabili.</p>
+              <figure id="earth-object-image-figure" hidden>
+                <img id="earth-object-image" alt="" loading="lazy" hidden>
+                <figcaption id="earth-object-image-caption"></figcaption>
+              </figure>
+              <dl id="earth-object-details-fields"></dl>
+              <p id="earth-object-description" hidden></p>
+              <p id="earth-object-details-source" class="earth-object-details-source"></p>
+            </section>
           </aside>
         </div>
+        <section class="earth-object-search" aria-labelledby="earth-object-search-title">
+          <div class="earth-object-search-heading">
+            <div>
+              <span class="earth-orbit-kicker">INDICE PARZIALE · CATALOGHI LOCALI + SATNOGS</span>
+              <h3 id="earth-object-search-title">Oggetti con dettagli catalogati</h3>
+              <p>Aprendo la ricerca vengono suggeriti in ordine alfabetico gli oggetti con almeno un metadato documentato negli snapshot CelesTrak locali e nelle schede SatNOGS. Il filtro immagini richiede un file raggiungibile e valido, ma non classifica visivamente il soggetto.</p>
+            </div>
+            <span class="earth-object-search-coverage">COPERTURA PARZIALE</span>
+          </div>
+          <form id="earth-object-search-form" class="earth-object-search-controls">
+            <label class="earth-object-search-query" for="earth-object-search-query">Cerca nome o NORAD
+              <input id="earth-object-search-query" name="q" type="search" maxlength="100" placeholder="es. ISS, NOAA 19, 25544">
+            </label>
+            <label for="earth-object-search-group">Gruppo
+              <select id="earth-object-search-group" name="group">
+                <option value="all">Tutti i gruppi locali</option>
+                <option value="stations">Stazioni</option>
+                <option value="visual">Satelliti visibili</option>
+                <option value="active">Attivi</option>
+                <option value="debris">Detriti catalogati</option>
+              </select>
+            </label>
+            <label class="earth-object-search-checkbox"><input id="earth-object-search-verified" type="checkbox"> Solo con immagine verificata</label>
+            <button id="earth-object-search-submit" type="submit">Cerca</button>
+          </form>
+          <p id="earth-object-search-status" class="earth-object-search-status" role="status">Avvia una ricerca per consultare i risultati verificabili.</p>
+          <div id="earth-object-search-results" class="earth-object-search-results" aria-live="polite"></div>
+          <nav class="earth-object-search-pagination" aria-label="Pagine risultati ricerca satelliti">
+            <button id="earth-object-search-previous" type="button" disabled>← Precedenti</button>
+            <button id="earth-object-search-next" type="button" disabled>Successivi →</button>
+          </nav>
+        </section>
+        <dialog id="earth-object-dialog" class="earth-object-dialog" aria-labelledby="earth-object-dialog-title">
+          <div class="earth-object-dialog-header">
+            <div><span class="earth-orbit-kicker">SCHEDA OGGETTO ORBITALE</span><h3 id="earth-object-dialog-title">Dettagli oggetto</h3></div>
+            <button id="earth-object-dialog-close" type="button" aria-label="Chiudi dettagli">CHIUDI ×</button>
+          </div>
+          <p id="earth-object-dialog-status" role="status"></p>
+          <div id="earth-object-dialog-country" class="earth-object-dialog-country" hidden></div>
+          <div id="earth-object-dialog-content"></div>
+        </dialog>
       </section>
       <footer class="bottom-bar">
         <span>© 2025 ORBITE EXPLORATION</span

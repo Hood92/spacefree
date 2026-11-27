@@ -2130,7 +2130,79 @@ body {
 .earth-object-panel dd { margin: 0; color: #d3e2df; font: 8px "DM Mono", monospace; text-align: right; }
 .earth-object-panel p { margin: 16px 0 10px; color: #9aafb5; font-size: 10px; line-height: 1.6; }
 .earth-object-panel > small { color: #6f8992; font: 8px/1.6 "DM Mono", monospace; }
+.earth-object-kinematics, .earth-object-telemetry { margin: 16px 0; padding: 11px; border: 1px solid rgba(139, 187, 196, .14); background: rgba(3, 15, 24, .62); }
+.earth-object-kinematics h4, .earth-object-telemetry h4 { margin: 0 0 8px; color: var(--lime); font: 8px "DM Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.earth-object-kinematics p, .earth-object-telemetry p { margin: 6px 0; color: #8299a2; font: 7px/1.5 "DM Mono", monospace; }
+.earth-object-kinematics dl { display: grid; gap: 6px; margin: 8px 0 0; }
+.earth-object-kinematics dl div { display: flex; justify-content: space-between; gap: 8px; padding-bottom: 5px; border-bottom: 1px solid rgba(139, 187, 196, .08); }
+.earth-object-kinematics dt { color: #718b96; font: 6px "DM Mono", monospace; }
+.earth-object-kinematics dd { color: #d3e2df; font: 7px "DM Mono", monospace; }
+.earth-object-details { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(139, 187, 196, 0.16); }
+.earth-object-details h4 { margin: 0 0 8px; color: #b8f93a; font: 9px "DM Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.earth-object-details p { margin: 8px 0; color: #9aafb5; font-size: 10px; line-height: 1.55; }
+.earth-object-details figure { margin: 10px 0; }
+.earth-object-details figure[hidden] { display: none; }
+.earth-object-details img { display: block; width: 100%; max-height: 180px; object-fit: contain; background: #030e17; border: 1px solid rgba(139, 187, 196, 0.16); }
+.earth-object-details img[hidden] { display: none; }
+.earth-object-details figcaption { margin-top: 5px; color: #718b96; font: 7px/1.5 "DM Mono", monospace; overflow-wrap: anywhere; }
+.earth-object-details dl { display: grid; gap: 8px; margin: 10px 0; }
+.earth-object-details dl div { display: grid; grid-template-columns: 40% 1fr; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(139, 187, 196, 0.08); }
+.earth-object-details dt { color: #718b96; font: 7px "DM Mono", monospace; }
+.earth-object-details dd { margin: 0; color: #d3e2df; font: 8px/1.5 "DM Mono", monospace; overflow-wrap: anywhere; }
+.earth-object-details-source { font: 7px/1.5 "DM Mono", monospace !important; overflow-wrap: anywhere; }
+.earth-object-details-source a { color: var(--lime); }
+.earth-object-search { margin-top: 26px; padding: 22px; border: 1px solid rgba(139, 187, 196, 0.18); background: linear-gradient(135deg, rgba(9, 29, 41, .96), rgba(4, 15, 24, .96)); }
+.earth-object-search-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.earth-object-search-heading h3 { margin: 7px 0; color: #e9f1ef; font: 600 18px "Space Grotesk", sans-serif; }
+.earth-object-search-heading p { max-width: 850px; margin: 0; color: #8da4ac; font: 9px/1.6 "DM Mono", monospace; }
+.earth-object-search-coverage { flex: 0 0 auto; padding: 5px 8px; border: 1px solid rgba(184, 249, 58, .35); color: var(--lime); font: 8px "DM Mono", monospace; }
+.earth-object-search-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+.earth-object-search-controls label { display: grid; gap: 5px; color: #9bb0b6; font: 8px "DM Mono", monospace; text-transform: uppercase; }
+.earth-object-search-query { flex: 1 1 230px; }
+.earth-object-search-controls input[type="search"], .earth-object-search-controls select { min-height: 34px; padding: 7px 9px; border: 1px solid rgba(139, 187, 196, .25); border-radius: 0; background: #04111a; color: #e3efec; font: 10px "DM Mono", monospace; }
+.earth-object-search-controls .earth-object-search-checkbox { display: flex; align-items: center; gap: 7px; min-height: 34px; text-transform: none; }
+.earth-object-search-checkbox input { accent-color: var(--lime); }
+.earth-object-search-controls button, .earth-object-search-pagination button { min-height: 34px; padding: 7px 14px; border: 1px solid rgba(184, 249, 58, .55); border-radius: 0; background: rgba(184, 249, 58, .08); color: var(--lime); font: 9px "DM Mono", monospace; cursor: pointer; }
+.earth-object-search-controls button:disabled, .earth-object-search-pagination button:disabled { opacity: .4; cursor: default; }
+.earth-object-search-status { margin: 14px 0; color: #8199a3; font: 8px/1.6 "DM Mono", monospace; }
+.earth-object-search-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); gap: 10px; }
+.earth-object-search-card { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 5px 10px; align-items: start; padding: 12px; border: 1px solid rgba(139, 187, 196, .14); background: rgba(2, 13, 21, .76); }
+.earth-object-search-select { display: grid; justify-items: start; gap: 5px; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.earth-object-search-select strong { color: #e5efed; font: 600 11px "Space Grotesk", sans-serif; }
+.earth-object-search-select > span:not(.earth-object-search-badges) { color: #8299a2; font: 7px "DM Mono", monospace; }
+.earth-object-search-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.earth-object-search-badge { padding: 3px 5px; font: 6px "DM Mono", monospace; }
+.earth-object-search-badge.is-data, .earth-object-search-badge.is-photo { border: 1px solid rgba(184, 249, 58, .35); color: var(--lime); }
+.earth-object-search-badge.is-partial, .earth-object-search-badge.is-no-photo { border: 1px solid rgba(225, 166, 95, .35); color: #e1a65f; }
+.earth-object-search-meta { grid-column: 1 / -1; color: #7e969e; font: 7px/1.5 "DM Mono", monospace; overflow-wrap: anywhere; }
+.earth-object-search-thumbnail { grid-column: 2; grid-row: 1 / span 3; width: 96px; height: 72px; object-fit: cover; border: 1px solid rgba(139, 187, 196, .18); }
+.earth-object-search-external { grid-column: 1 / -1; justify-self: start; color: #b8f93a; font: 7px "DM Mono", monospace; text-decoration: none; }
+.earth-object-search-pagination { display: flex; justify-content: space-between; gap: 8px; margin-top: 14px; }
+.earth-object-dialog { width: min(760px, calc(100vw - 28px)); max-height: min(86vh, 900px); overflow: auto; padding: 22px; border: 1px solid rgba(184, 249, 58, .45); background: #06131d; color: #d3e2df; box-shadow: 0 24px 90px rgba(0, 0, 0, .72); }
+.earth-object-dialog::backdrop { background: rgba(0, 5, 10, .78); backdrop-filter: blur(3px); }
+.earth-object-dialog-header { display: flex; justify-content: space-between; align-items: start; gap: 16px; border-bottom: 1px solid rgba(139, 187, 196, .2); padding-bottom: 12px; }
+.earth-object-dialog-header h3 { margin: 6px 0 0; color: #eef6f2; font: 600 18px "Space Grotesk", sans-serif; overflow-wrap: anywhere; }
+.earth-object-dialog-header button { padding: 7px 10px; border: 1px solid rgba(184, 249, 58, .45); background: transparent; color: var(--lime); font: 8px "DM Mono", monospace; cursor: pointer; }
+.earth-object-dialog > p { color: #91a8ae; font: 9px/1.6 "DM Mono", monospace; }
+.earth-object-dialog h4 { margin: 16px 0 8px; color: var(--lime); font: 8px "DM Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.earth-object-dialog-country { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.earth-object-dialog-country[hidden] { display: none; }
+.earth-object-country-item { display: inline-flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid rgba(139, 187, 196, .22); background: rgba(139, 187, 196, .06); font: 10px "DM Mono", monospace; }
+.earth-object-flag { font-size: 20px; line-height: 1; }
+.earth-object-dialog dl { display: grid; gap: 8px; margin: 10px 0; }
+.earth-object-dialog dl div { display: grid; grid-template-columns: minmax(120px, 35%) 1fr; gap: 10px; padding-bottom: 7px; border-bottom: 1px solid rgba(139, 187, 196, .1); }
+.earth-object-dialog dt { color: #718b96; font: 8px "DM Mono", monospace; }
+.earth-object-dialog dd { margin: 0; color: #d3e2df; font: 9px/1.5 "DM Mono", monospace; overflow-wrap: anywhere; }
+.earth-object-dialog figure { margin: 12px 0; }
+.earth-object-dialog figure img { max-height: 300px; }
+.earth-object-dialog p { color: #9aafb5; font: 10px/1.6 "DM Mono", monospace; }
+.earth-object-dialog a { color: var(--lime); }
 .earth-history-control { display: grid; gap: 7px; margin: 12px 0 18px; padding: 11px 14px; border-left: 3px solid var(--lime); background: rgba(8, 26, 38, .78); }
+.earth-simulation-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin: 12px 0; padding: 10px 13px; border: 1px solid rgba(139, 187, 196, .17); background: rgba(3, 15, 24, .82); }
+.earth-simulation-controls time { color: #e5efed; font: 10px "DM Mono", monospace; }
+.earth-simulation-controls button, .earth-simulation-controls select { min-height: 29px; padding: 5px 9px; border: 1px solid rgba(184, 249, 58, .42); border-radius: 0; background: #04111a; color: var(--lime); font: 8px "DM Mono", monospace; }
+.earth-simulation-controls label { color: #8199a3; font: 7px "DM Mono", monospace; }
+.earth-simulation-controls > span:last-child { flex: 1 1 100%; color: #8199a3; font: 7px/1.5 "DM Mono", monospace; }
 .earth-history-control label { display: flex; justify-content: space-between; color: #a9bec4; font: 8px "DM Mono", monospace; letter-spacing: .08em; }
 .earth-history-control output { color: var(--lime); font-size: 11px; }
 .earth-history-control input { width: 100%; accent-color: var(--lime); }
@@ -2142,6 +2214,10 @@ body {
   .earth-orbit-layout { grid-template-columns: 1fr; }
   .earth-orbit-stage { min-height: 820px; }
   .earth-object-panel { border-left: 0; border-top: 1px solid rgba(139, 187, 196, 0.13); }
+  .earth-object-search { padding: 15px; }
+  .earth-object-search-heading { flex-direction: column; }
+  .earth-object-dialog { padding: 15px; }
+  .earth-object-dialog dl div { grid-template-columns: 1fr; gap: 4px; }
 }
 .map-panel.map3d-ready > .system-nodes,
 .map-panel.map3d-ready > .constellation-lines {

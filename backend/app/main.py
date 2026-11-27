@@ -1,10 +1,13 @@
 import json
+import math
+from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from requests import RequestException
 from app.models.schemas import QueryRequest, QueryResponse
 from app.services.earth_imagery import PROVIDERS, ImageryUnavailable, fetch_earth_image, fill_earth_gaps
+from app.services.earth_object_details import get_earth_object_details, search_earth_objects
 from app.services.ollama_service import ollama_service
 from app.database.chroma_db import chroma_manager
 
@@ -90,14 +93,134 @@ async def orbital_positions(group: str = Query("active"), limit: int = Query(120
         try:
             satellite = Satrec()
             omm.initialize(satellite, obj)
-            error_code, position, _velocity = satellite.sgp4(jd, fraction)
-            if error_code == 0 and all(value == value and abs(value) < 1e8 for value in position):
-                positions.append({"object": obj, "positionKm": position})
+            error_code, position, velocity = satellite.sgp4(jd, fraction)
+            if error_code == 0 and all(math.isfinite(value) and abs(value) < 1e8 for value in (*position, *velocity)):
+                positions.append({"object": obj, "positionKm": position, "velocityKmPerSec": velocity})
         except (KeyError, TypeError, ValueError):
             continue
     if not positions:
         raise HTTPException(status_code=502, detail="Nessun elemento OMM valido per la propagazione SGP4")
-    return {**catalog, "positions": positions, "propagatedAt": now.isoformat(), "propagator": "python-sgp4 / WGS72"}
+    return {
+        **catalog,
+        "positions": positions,
+        "propagatedAt": now.isoformat(),
+        "propagator": "python-sgp4 / WGS72",
+        "coordinateFrame": "TEME",
+        "elementModel": "CelesTrak OMM da cache locale",
+        "elementEpochField": "EPOCH",
+        "telemetryStatus": "not-integrated",
+    }
+
+
+def _geodetic_state(position_km, velocity_km_s, at):
+    """Convert TEME state to approximate WGS84 geodetic coordinates for display."""
+    x, y, z = position_km
+    julian_date = at.timestamp() / 86400.0 + 2440587.5
+    centuries = (julian_date - 2451545.0) / 36525.0
+    gmst_degrees = (280.46061837 + 360.98564736629 * (julian_date - 2451545.0) + 0.000387933 * centuries**2 - centuries**3 / 38710000.0) % 360
+    theta = math.radians(gmst_degrees)
+    cos_theta, sin_theta = math.cos(theta), math.sin(theta)
+    ecef_x = cos_theta * x + sin_theta * y
+    ecef_y = -sin_theta * x + cos_theta * y
+    ecef_z = z
+    semi_major_km = 6378.137
+    eccentricity_sq = 6.69437999014e-3
+    horizontal = math.hypot(ecef_x, ecef_y)
+    latitude = math.atan2(ecef_z, horizontal * (1 - eccentricity_sq))
+    altitude = 0.0
+    for _ in range(5):
+        prime_vertical = semi_major_km / math.sqrt(1 - eccentricity_sq * math.sin(latitude) ** 2)
+        cosine = math.cos(latitude)
+        altitude = horizontal / cosine - prime_vertical if abs(cosine) > 1e-10 else abs(ecef_z) - prime_vertical * (1 - eccentricity_sq)
+        latitude = math.atan2(ecef_z, horizontal * (1 - eccentricity_sq * prime_vertical / (prime_vertical + altitude)))
+    return {
+        "latitudeDeg": math.degrees(latitude),
+        "longitudeDeg": ((math.degrees(math.atan2(ecef_y, ecef_x)) + 180) % 360) - 180,
+        "altitudeKm": altitude,
+        "speedKmPerSec": math.sqrt(sum(component * component for component in velocity_km_s)),
+    }
+
+
+@app.get("/api/orbital-state/{norad_id}")
+async def orbital_object_state(
+    norad_id: int,
+    group: str = Query("active"),
+    at: str | None = Query(default=None, max_length=40),
+):
+    if norad_id < 1 or norad_id > 999_999_999:
+        raise HTTPException(status_code=400, detail="ID NORAD non valido")
+    group = group.lower()
+    if group not in ORBITAL_CACHE_FILES:
+        raise HTTPException(status_code=400, detail="Gruppo orbitale non valido")
+    try:
+        timestamp = datetime.fromisoformat(at.replace("Z", "+00:00")) if at else datetime.now(timezone.utc)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail="Timestamp simulazione non valido") from error
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    timestamp = timestamp.astimezone(timezone.utc)
+    catalog = await orbital_objects(group, 12000)
+    obj = None
+    for record in catalog["objects"]:
+        try:
+            if int(record.get("NORAD_CAT_ID") or 0) == norad_id:
+                obj = record
+                break
+        except (TypeError, ValueError):
+            continue
+    if obj is None:
+        raise HTTPException(status_code=404, detail="Oggetto non presente nel gruppo CelesTrak caricato")
+    try:
+        from sgp4 import omm
+        from sgp4.api import Satrec, jday
+        satellite = Satrec()
+        omm.initialize(satellite, obj)
+        jd, fraction = jday(timestamp.year, timestamp.month, timestamp.day, timestamp.hour, timestamp.minute, timestamp.second + timestamp.microsecond / 1e6)
+        error_code, position, velocity = satellite.sgp4(jd, fraction)
+    except (ImportError, KeyError, TypeError, ValueError) as error:
+        raise HTTPException(status_code=422, detail="Elementi OMM non validi per SGP4") from error
+    if error_code != 0 or not all(math.isfinite(value) for value in (*position, *velocity)):
+        raise HTTPException(status_code=422, detail=f"SGP4 non disponibile per questo oggetto (codice {error_code})")
+    return {
+        "noradId": norad_id,
+        "objectName": obj.get("OBJECT_NAME"),
+        "propagator": "python-sgp4 / WGS72",
+        "coordinateFrame": "TEME",
+        "positionKm": position,
+        "velocityKmPerSec": velocity,
+        **_geodetic_state(position, velocity, timestamp),
+        "propagatedAt": timestamp.isoformat(),
+        "elementEpoch": obj.get("EPOCH"),
+        "catalogUpdatedAt": catalog.get("updatedAt"),
+        "source": catalog.get("source"),
+        "telemetryStatus": "not-integrated",
+        "telemetryNote": "La risposta è una propagazione orbitale SGP4; non è telemetria di bordo né un'osservazione.",
+    }
+
+
+@app.get("/api/earth/object/{norad_id}")
+async def earth_object_details(norad_id: int, group: str | None = Query(default=None)):
+    if norad_id < 1 or norad_id > 999_999_999:
+        raise HTTPException(status_code=400, detail="ID NORAD non valido")
+    if group is not None and group.lower() not in ORBITAL_CACHE_FILES:
+        raise HTTPException(status_code=400, detail="Gruppo orbitale non valido")
+    return await get_earth_object_details(norad_id, group.lower() if group else None)
+
+
+@app.get("/api/earth/objects/search")
+async def earth_objects_search(
+    q: str = Query(default="", max_length=100),
+    group: str | None = Query(default=None),
+    verified_image_only: bool = Query(default=True),
+    limit: int = Query(default=12, ge=1, le=20),
+    offset: int = Query(default=0, ge=0, le=10000),
+):
+    if group is not None and group.lower() not in ORBITAL_CACHE_FILES:
+        raise HTTPException(status_code=400, detail="Gruppo orbitale non valido")
+    return await search_earth_objects(
+        query=q, group=group.lower() if group else None,
+        verified_image_only=verified_image_only, limit=limit, offset=offset,
+    )
 
 @app.get("/api/exoplanets")
 async def exoplanets():
